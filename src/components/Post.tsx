@@ -4,6 +4,7 @@ import { auth, db } from '../services/firebase';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../services/firebase';
 import '../styles/global.css';
+import { Link } from 'react-router-dom';
 
 interface PostProps {
   id: string;
@@ -34,22 +35,28 @@ const Post: React.FC<PostProps> = ({
   const [mediaSource, setMediaSource] = useState<string | null>(null);
 
   // Fetch downloadable URL from Firebase Storage
-  const fetchMediaURL = async (path: string) => {
+  const fetchMediaURL = async (path: string): Promise<string | null> => {
+    try {
     const mediaRef = ref(storage, path);
     return await getDownloadURL(mediaRef);
-  };
+  } catch (error) {
+    console.error("Error fetching media URL:", error);
+    return null;
+  }
+};
 
   // useEffect to load media source from Firebase
   useEffect(() => {
     const loadMediaURL = async () => {
       if (mediaURL) {
         const downloadURL = await fetchMediaURL(mediaURL);
-        setMediaSource(downloadURL);
+        if (downloadURL) setMediaSource(downloadURL);
       }
     };
     loadMediaURL();
   }, [mediaURL]);
-
+  
+  // useEffect to load media source from Firebase
   useEffect(() => {
     if (user) {
       setHasLiked(likes.includes(user.email || ''));
@@ -133,7 +140,11 @@ const Post: React.FC<PostProps> = ({
 
   return (
     <div className={`grid-item ${mediaSource ? 'media-post' : 'text-post'} p-2 mt-3 rounded-md shadow-md`}>
-      <div className="post-author font-bold p-1 ">{authorUsername || 'Unknown'}</div>
+      <div className="post-author font-bold p-1">
+        <Link to={`/profile/${authorId}`} className='username-link'>
+        {authorUsername || 'Unknown'}
+        </Link>
+      </div>
       {content && <div className="post-content p-1 mb-3">{content}</div>}
 
       {renderMedia()}

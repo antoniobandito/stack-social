@@ -4,132 +4,158 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 
+interface ProfileBannerProps {
+    bio: string;
+    prolink: string;
+    location: string;
+    profilePicUrl: string;
+    username: string;
+    email: string,
+    isEditable: boolean; // Determines if the profile can be edited (only for currentUser)
+    onProfilePicUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void; // Optional upload function  
+    }
 
-const ProfileBanner = () => { 
-    const { currentUser, profileData } = useAuth();
+
+const ProfileBanner: React.FC<ProfileBannerProps> = ({
+    bio,
+    prolink,
+    location,
+    profilePicUrl,
+    username,
+    email,
+    isEditable,
+    onProfilePicUpload,
+    }) => {
+    const { currentUser } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
-    const [newBio, setNewBio] = useState(profileData?.bio || '');
-    const [newLocation, setNewLocation] = useState(profileData?.location || '');
-    const [newProLink, setNewProLink] = useState(profileData?.prolink || '');
-    const [newProfilePicUrl, setNewProfilePicUrl] = useState(profileData?.profilePicUrl || '');
+    const [newBio, setNewBio] = useState(bio);
+    const [newLocation, setNewLocation] = useState(location);
+    const [newProLink, setNewProLink] = useState(prolink);
+    const [profilePic, setProfilePic] = useState(profilePicUrl || '');
+    const [isUploading, setIsUploading] = useState(false);
+    
+    const isOwner = currentUser?.email === email;
 
     useEffect(() => {
-        if (profileData) {
-            setNewBio(profileData.bio || '');
-            setNewLocation(profileData.location || '');
-            setNewProLink(profileData.prolink || '');
-            setNewProfilePicUrl(profileData.profilePicUrl || '');
-        }
-    }, [profileData]);
+        // Update editable fields when props change
+            setNewBio(bio || '');
+            setNewLocation(location || '');
+            setNewProLink(prolink || '');
+            setProfilePic(profilePicUrl || '');
+        }, [bio, location, prolink, profilePicUrl]);
 
     const handleSave = async () => {
         // Save to database here
-        if (!currentUser) return;
-
-        setIsEditing(false);
+        if (!isOwner) return; // Only save changes if editing own profile
 
         try {
             const userDoc = doc(db, 'users', currentUser.uid);
+            //Update Firestore document with new Values 
             await updateDoc(userDoc, {
                 bio: newBio,
                 location: newLocation,
                 prolink: newProLink,
-                profilePicUrl: newProfilePicUrl,
             });
             console.log("Profile updated successfully.");
             setIsEditing(false);
-        } catch (error) {
+            } catch (error) {
             console.error('Error updating profile: ', error);
         }    
     };
 
     const handleProfilePicUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (!event.target.files || !currentUser) return;
-
+        if (!event.target.files || !isOwner) return;
+    
         const file = event.target.files[0];
         const storageRef = ref(storage, `profile_pics/${currentUser.uid}`);
+        setIsUploading(true);
 
         try {
-            await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(storageRef);
-            setNewProfilePicUrl(downloadURL);
-
-            // Update the Firestore document with the new profile picture URL
-            const userDoc = doc(db, 'users', currentUser.uid);
-            await updateDoc(userDoc, { profilePicUrl: downloadURL });
-            console.log("Profile picture updated successfully.");
+          await uploadBytes(storageRef, file);
+          const downloadURL = await getDownloadURL(storageRef);
+          await updateDoc(doc(db, 'users', currentUser.uid), { profilePicUrl: downloadURL });
+          setProfilePic(downloadURL);
+          console.log('Profile picture updated successfully!');
         } catch (error) {
-            console.error("Error uploading profile picture:", error);
+          console.error('Error uploading profile picture:', error);
+        } finally {
+            setIsUploading(false);
         }
-    };
-
+      };
+    
+    
     return (
     <div className='profile-banner'>
+        {/* Profile Picture */}
         <div className='profile-pic'>
-            <label htmlFor='profile-pic-upload'>
-                <img
-                src={newProfilePicUrl || 'src/assets/default_pfp.svg.png'}
-                alt=''
-                className='profile-pic-img'
-                />
+            <label htmlFor='profile-pic-upload'> 
+            {isUploading ? (
+                <div className="spinner">Loading...</div>
+            ) : (
+            <img
+            src={profilePic}
+            className='profile-pic-img'
+            />
+            )}
             </label>
+            {isOwner && (
             <input 
             id='profile-pic-upload'
             type='file'
             accept='image/*'
             style={{ display: 'none' }}
-            onChange={handleProfilePicUpload}
+            onChange={onProfilePicUpload || handleProfilePicUpload}
             />
-        </div>
+            )}
+            </div>
+
         {/* Username Display */}
-        <h2>{profileData?.username || ''}</h2>
+        <h2>{username}</h2>
 
         {/* Editable Profile Info */}
         <div className='profile-info'>
             {isEditing ? (
+            <>
                 <input 
                 value={newBio}
                 onChange={(e) => setNewBio(e.target.value)}
                 placeholder='Bio' 
                 />
-            ) : (
-                <p>{newBio}</p>
-            )}
-
-            {isEditing ? (
                 <input 
                 value={newLocation}
                 onChange={(e) => setNewLocation(e.target.value)}
                 placeholder='Location'
                 />
-            ) : (
-                <p>{newLocation}</p>
-            )}
-
-            {isEditing ? (
                 <input 
                 value={newProLink}
-                onChange={(e) => setNewLocation(e.target.value)}
+                onChange={(e) => setNewProLink(e.target.value)}
                 placeholder='Link'
                 />
-            ) : (
-                <p>{newProLink}</p>
-            )}
+            </>
+        ) : (
+            <>
+                <p>{bio || ''}</p>
+                <p>{location || ''}</p>
+                <p>{prolink || ''}</p>
+            </>
+        )}
         </div>
-
-        <div className='profile-links'>
-            <span>follow </span>
-            <span>message </span>
-        </div>
-
+        
+        {/* Edit/Save Buttons */}
+        {isOwner && (
         <div className='profile-edit-button'>
-            <button onClick={() => setIsEditing(!isEditing)}>
-                {isEditing ? "Cancel" : "Edit"}
-            </button>
-            {isEditing && <button onClick={handleSave}>Save</button>}
+            {isEditing ? (
+            <>
+              <button onClick={() => setIsEditing(false)}>Cancel</button>
+              <button onClick={handleSave}>Save</button>
+            </>
+          ) : (
+            <button onClick={() => setIsEditing(true)}>Edit</button>
+          )}
         </div>
+      )}
     </div>
-  )
-}
+  );
+};
 
 export default ProfileBanner
