@@ -1,22 +1,27 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { auth, db, storage } from '../services/firebase';
 import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { FaImage, FaFile } from 'react-icons/fa';
+import { FaImage, FaFile, FaMusic } from 'react-icons/fa';
 import {ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import '../styles/global.css';
 
 interface CreatePostModalProps {
     onClose: () => void;
+    currentUser: { email: string; displayName: string } | null;
 }
 
 const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
     const [content, setContent] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState<boolean>(false);
     const [mediaFile, setMediaFile] = useState<File | null>(null);
-    const [uploadFile, setUploadFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+    const [mediaType, setMediaType] = useState<'image' | 'gif' | 'video' | 'audio' | null>(null);
+    const [originaFileName, setOriginalFileName] = useState<string | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const audioRef = useRef<HTMLAudioElement>(null);
     const { currentUser } = useAuth();
 
     const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -27,41 +32,60 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
             const fileURL = URL.createObjectURL(file);
-            if (e.target.id === 'upload-media') {
-                setMediaFile(file);
-                setMediaPreview(fileURL);
-            } else if (e.target.id === 'upload-file') {
-                setUploadFile(file);
+
+            // Determine media type
+            if (file.type === 'image/gif') {
+                setMediaType('gif');
+            } else if (file.type.startsWith('image/')) {
+                setMediaType('image');
+            } else if (file.type.startsWith('video/')) {
+                setMediaType('video');
+            } else if (file.type.startsWith('audio/')) {
+                setMediaType('audio');
+                setMediaPreview(URL.createObjectURL(file));
             }
+
+            setMediaFile(file);
+            setMediaPreview(fileURL);
+            setOriginalFileName(file.name);
+            setError('');
         }
+    };
+
+    const uploadFileToStorage = async (file: File, folder: string): Promise<string> => {
+        const fileRef = ref(storage, `${folder}${uuidv4()}-${file.name}`);
+        await uploadBytes(fileRef, file);
+        return getDownloadURL(fileRef);
     };
 
     const handleCreatePost = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!content.trim() && !mediaFile && !uploadFile) {
+        if (!content.trim() && !mediaFile) {
             setError('Post cannot be empty.');
             return;
-
         }
+        
+        setLoading(true);
 
         try {
             let mediaURL = '';
-            let fileURL = '';
+            let originalFileName = '';
 
-            // Upload media file if exists
+            // Determine the appropriate folder based on media type
             if (mediaFile) {
-                const mediaRef = ref(storage, `media/${uuidv4()}-${mediaFile.name}`);
-                await uploadBytes(mediaRef, mediaFile);
-                mediaURL = await getDownloadURL(mediaRef);
-            }
+            const storageFolderMap: Record<string, string> = {
+                image: 'images/',
+                gif: 'gifs/',
+                video: 'videos/',
+                audio: 'audio/',
+            };
+            const folder = storageFolderMap[mediaType!] || 'media/';
+            mediaURL = await uploadFileToStorage(mediaFile, folder);
+            
 
-            // Upload other file if exists
-            if (uploadFile) {
-                const fileRef = ref(storage, `files/${uuidv4()}-${uploadFile.name}`);
-                await uploadBytes(fileRef, uploadFile);
-                fileURL = await getDownloadURL(fileRef);
- 
-            }
+            //Capture the original filename
+            originalFileName = mediaFile.name;
+        }
 
             // Retrieve the username from Firestore 
             let authorUsername = 'Unknown';
@@ -69,7 +93,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
                 const userRef = doc(db, 'users', currentUser.uid);
                 const userDoc = await getDoc(userRef);
                 if (userDoc.exists()) {
-                    authorUsername = userDoc.data().username || 'Uknown';
+                    authorUsername = userDoc.data().username || 'Unknown';
                 }
             }
 
@@ -80,49 +104,89 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
                 authorUsername,
                 createdAt: Timestamp.now(),
                 mediaURL: mediaURL || '',
-                fileURL,
+                fileURL: mediaURL || '',
+                originaFileName: originalFileName,
+                mediaType: mediaType || 'image',
                 likes:[],
                 reposts: [],
             });
 
             setContent('');
             setMediaFile(null);
-            setUploadFile(null);
             setMediaPreview(null);
+            setMediaType(null);
+            setOriginalFileName(null);
             setError('');
             onClose();
         } catch (err) {
             console.error("Failed to create post:", err);
             setError("Failed to create post");
+        }   finally {
+            setLoading(false);
         }
     };
 
     const renderMediaPreview = () => {
         if (!mediaPreview) return null;
 
-        const isVideo = mediaFile?.type.startsWith('video/');
-        const isGif = mediaFile?.type === 'image/gif';
-
-        if (isGif || mediaFile?.type.startsWith('image/')) {
-            return <img src={mediaPreview} alt='Selected media' className='media-preview rounded' />;
-        }
-
-        if (isVideo) {
-            return (
-                <video controls className='media-preview rounded'>
-                    <source src={mediaPreview} type={mediaFile?.type} />
-                    Your browser does not support the video tag.
-                </video>
+        switch (mediaType) {
+            case 'image':
+            case 'gif':
+                return (
+                <div className='media-preview-container'>
+                    <img 
+                    src={mediaPreview} 
+                    alt='Selected media' 
+                    className='media-preview' 
+                    />
+                </div>
             );
+            case 'video':
+                return (
+                    <div className='media-preview-container'>
+                    <video
+                        ref={videoRef}
+                        src={mediaPreview} 
+                        controls 
+                        className='media-preview max-h-60 w-full'
+                        onLoadedMetadata={() => {
+                        if (videoRef.current) {
+                            videoRef.current.volume = 0.1;
+                        }
+                    }}
+                    >
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                );
+            case 'audio':
+                return (
+                    <div className="media-preview-container flex items-center">
+                        <FaMusic className="mr-2" />
+                        <audio 
+                            ref={audioRef}
+                            src={mediaPreview}
+                            controls
+                            className='audio-preview w-full'
+                            onLoadedMetadata={() => {
+                                if (audioRef.current) {
+                                    audioRef.current.volume = 0.5;
+                                }
+                            }}
+                        >
+                            Your browser does not support the audio tag.
+                        </audio>
+                    </div>
+                );
+            default:
+                return null;
         }
-
-        return null;
     }
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="max-w-md w-full bg-white p-8 rounded shadow-md">
-            <h2 className="text-2xl font-bold mb-6 text-center">Create Post</h2>
+            <h2 className="text-2xl font-bold bg-inherit mb-6 text-center">Create Post</h2>
             {error && <p className="text-red-500 text-center">{error}</p>}
             <form onSubmit={handleCreatePost} className="space-y-4">
                 <div className="relative">
@@ -141,7 +205,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
                             <input
                                 id="upload-media"
                                 type="file"
-                                accept="image/*,video/*,image/gif"
+                                accept="image/*,video/*,audio/*"
                                 onChange={handleFileChange}
                                 className="hidden"
                             />

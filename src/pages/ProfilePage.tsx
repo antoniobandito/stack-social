@@ -9,7 +9,6 @@ import '../styles/global.css';
 import { useAuth } from '../context/AuthContext'; // Assuming you have an Auth context
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useParams } from 'react-router-dom';
-import { UserProfile } from 'firebase/auth';
 
 
 interface PostData {
@@ -25,6 +24,7 @@ interface PostData {
 }
 
 interface ProfileData {
+  email: string;
   bio: string;
   location: string;
   prolink: string;
@@ -131,7 +131,7 @@ const ProfilePage: React.FC = () => {
     }
 
   return (
-    <div className="profile-page">
+    <div className="profile-page"> 
       <div className='profile-banner-container'>
       <ProfileBanner 
           bio={userProfile.bio || ''}
@@ -141,7 +141,7 @@ const ProfilePage: React.FC = () => {
           profilePicUrl={userProfile.profilePicUrl || ''}
           email={userProfile.email || ''}
           isEditable={isEditable}
-          onProfilePicUpload={currentUser?.uid === userId ? handleProfilePicUpload : undefined}  
+          onProfilePicUpload={currentUser?.uid === userId ? handleProfilePicUpload : undefined}
           />
       </div>
       {posts.length === 0 ? (

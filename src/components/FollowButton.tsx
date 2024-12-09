@@ -1,4 +1,4 @@
-import { collection, query, serverTimestamp, deleteDoc, doc, getDoc, onSnapshot, setDoc, updateDoc, where, writeBatch, getDocs } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../services/firebase';
@@ -22,11 +22,10 @@ const ProfileBanner: React.FC<ProfileBannerProps> = ({
     profilePicUrl,
     username,
     email,
+    isEditable,
     onProfilePicUpload,
     }) => {
     const { currentUser } = useAuth();
-
-    //state management  
     const [isEditing, setIsEditing] = useState(false);
     const [newBio, setNewBio] = useState(bio);
     const [newLocation, setNewLocation] = useState(location);
@@ -48,92 +47,43 @@ const ProfileBanner: React.FC<ProfileBannerProps> = ({
 
 
     useEffect(() => {
-    const checkFollowStatus = async () => {
+    // Check if the current user is following this profile 
     if (!currentUser || isOwner) return;
 
-    try {
-        const userQuery = query(
-          collection(db, 'users'), 
-          where('email', '==', email)
-        );
-        const userSnapshot = await getDocs(userQuery);
-  
-        if (userSnapshot.empty) return;
-        
-  
-        const targetUserDoc = userSnapshot.docs[0];
-        const targetUserUID = targetUserDoc.id;
+    const docRef = doc(db, 'users', currentUser.uid, 'following', email);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    setIsFollowing(docSnap.exists());
+    });
 
-      // Check if a follow document exists in the current user's following collection
-      const followDocRef = doc(
-        db, 
-        'users', 
-        currentUser.uid, 
-        'following', 
-        targetUserUID
-    );
-    
-    const followDocSnap = await getDoc(followDocRef);
-        setIsFollowing(followDocSnap.exists());
-      } catch (error) {
-        console.error('Error checking follow status:', error);
-      }
-      };
-        checkFollowStatus();
+    return () => unsubscribe(); // Cleanup listener
     }, [currentUser, email, isOwner]);
     
-
-    // Follow method 
     const handleFollow = async () => {
       if (!currentUser || isOwner || isLoading) return;
       setIsLoading(true);
 
       try {
-        //Find target user document reliably 
-        const userQuery = query(
-          collection(db, 'users'),
-          where('email', '==', email)
-        );
-        const userSnapshot = await getDocs(userQuery);
 
-        if (userSnapshot.empty) return;
+        const userDocRef = doc(db, 'users', email);
+        const userDocSnap = await getDoc(userDocRef);
 
-        const targetUserDoc = userSnapshot.docs[0];
-        const targetUserUID = targetUserDoc.id;
-        
-        // Use batch writes for atomic, consistent updates 
-        const batch = writeBatch(db);
+        if (!userDocSnap.exists()) {
+          setIsLoading(false)
+          return;
+        }
 
-
-        const currentUserFollowingRef = doc(
-          db,
-          'users',
-          currentUser.uid,
-          'following',
-          targetUserUID
-        );
-
-        const targetUserFollowersRef = doc(
-          db,
-          'users',
-          targetUserUID,
-          'followers',
-          currentUser.uid
-        );
-
-        batch.set(currentUserFollowingRef, {
+        const targetUserUID = userDocSnap.id;
+        // Add to 'following' subcollection of the current user
+        await setDoc(doc(db, 'users', currentUser.uid, 'following', email), {
           email,
           username,
-          followedAt: serverTimestamp()
         });
-
-        batch.set(targetUserFollowersRef, {
+        // Add to 'followers' subcollection of the target user
+        await setDoc(doc(db, 'users', targetUserUID, 'followers', currentUser.email!), {
           email: currentUser.email,
           username: currentUser.displayName || currentUser.email,
-          followedAt: serverTimestamp()
         });
 
-        await batch.commit();
         setIsFollowing(true);
       } catch (error) {
         console.error('Error following user:', error);
@@ -142,44 +92,23 @@ const ProfileBanner: React.FC<ProfileBannerProps> = ({
       }
     };
     
-    // Parallel unfollow method with similar robust error handling
-  const handleUnfollow = async () => {
-    if (!currentUser || isOwner || isLoading) return;
-    
-    setIsLoading(true);
+    const handleUnfollow = async () => {
+      if (!currentUser || isOwner || isLoading) return;
+      setIsLoading(true);
 
-    try{
-      const userQuery = query(
-        collection(db, 'users'), 
-        where('email', '==', email)
-    );
-      const userSnapshot = await getDocs(userQuery);
-
-      if (userSnapshot.empty) {
-        throw new Error('User not found');
-    }
-
-      const targetUserDoc = userSnapshot.docs[0];
-      const targetUserUID = targetUserDoc.id;
-
-      const batch = writeBatch(db);
-
-      batch.delete(
-        doc(db, 'users', currentUser.uid, 'following', targetUserUID)
-    );
-      batch.delete(
-        doc(db, 'users', targetUserUID, 'followers', currentUser.uid)
-    );
-
-      await batch.commit();
-      setIsFollowing(false);
-    }    catch (error) {
+      try {
+      // Remove from 'following' subcollection of the current
+      await deleteDoc(doc(db, 'users', currentUser.uid, 'following', email));
+      // Remove from 'followers' subcollection of the target user
+       await deleteDoc(doc(db, 'users', email, 'followers', currentUser.email!));
+      
+       setIsFollowing(false);
+    } catch (error) {
       console.error('Error unfollowing user:', error);
-      alert('Failed to unfollow user. Please try again.');
     } finally {
       setIsLoading(false);
     }
-    };
+  };
 
 
     const handleSave = async () => {
@@ -231,8 +160,7 @@ const ProfileBanner: React.FC<ProfileBannerProps> = ({
             ) : (
             <img
             src={profilePic}
-            className='profile-pic-img'
-            />
+            className='profile-pic-img'/>
             )}
             </label>
             {isOwner && (
@@ -292,19 +220,15 @@ const ProfileBanner: React.FC<ProfileBannerProps> = ({
         ) : (
         // FollowButton Component 
         <div className='follow-button'>
-        <button
-          onClick={isFollowing ? handleUnfollow : handleFollow} 
-          disabled={isLoading}
-          className={`
-          ${isFollowing ? 'bg-white' : 'bg-slate-100' }
-          text-black px-3 border-slate-400 mt-2`
-          }
-          >
-          {isLoading
-            ? '...'
-            : (isFollowing ? 'unfollow' : 'follow')
-          }
-          </button>
+          {isFollowing ? (
+            <button onClick={handleUnfollow} disabled={isLoading}>
+              {isLoading ? '...' : 'unfollow'}
+            </button>
+        ) : (
+            <button onClick={handleFollow} disabled={isLoading}>
+              {isLoading ? '...' : 'follow'}
+            </button>
+          )}
           </div>
         )}
     </div>

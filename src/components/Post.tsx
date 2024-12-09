@@ -5,6 +5,8 @@ import { getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '../services/firebase';
 import '../styles/global.css';
 import { Link } from 'react-router-dom';
+import { FaMusic, FaPlay, FaPause } from 'react-icons/fa';
+import AudioPlayer from './AudioPlayer';
 
 interface PostProps {
   id: string;
@@ -15,7 +17,11 @@ interface PostProps {
   likes?: string[];
   reposts?: string[];
   mediaURL?: string;
-  fileURL?: string;
+  mediaType?: 'image' | 'gif' | 'video' | 'audio';
+  fileURL: string;
+  originalFileName?: string;
+  audioFileURL?: string;
+  audioFileName?: string;
 }
 
 const Post: React.FC<PostProps> = ({ 
@@ -26,35 +32,66 @@ const Post: React.FC<PostProps> = ({
   createdAt, 
   likes = [], 
   reposts = [], 
-  mediaURL, 
-  fileURL 
+  mediaURL,
+  mediaType: propMediaType = 'image',
+  fileURL,
+  originalFileName  
 }) => {
   const user = auth.currentUser;
   const [hasLiked, setHasLiked] = useState<boolean>(false);
   const [hasReposted, setHasReposted] = useState<boolean>(false);
-  const [mediaSource, setMediaSource] = useState<string | null>(null);
+  const [mediaSource, setMediaSource] = useState<string | null>(null);;
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [mediaType, setMediaType] = useState<string | null>(propMediaType);
+  const audioRef = React.useRef<HTMLAudioElement>(null);
 
-  // Fetch downloadable URL from Firebase Storage
-  const fetchMediaURL = async (path: string): Promise<string | null> => {
-    try {
-    const mediaRef = ref(storage, path);
-    return await getDownloadURL(mediaRef);
-  } catch (error) {
-    console.error("Error fetching media URL:", error);
-    return null;
+  const extractFileExtension = (url: string): string | null => {
+    const match = url.match(/\.([0-9a-z]+)(?=[?#]|$)/i);
+    return match ? match[1].toLowerCase() : null;
+  };
+
+  const mapExtensionToMediaType = (extension: string): string => {
+    const typeMap: { [key: string]: string } = {
+      'gif': 'gif',
+      'mp4': 'video',
+      'webm': 'video',
+      'mov': 'video',
+      'mp3': 'audio',
+      'wav': 'audio',
+      'ogg': 'audio',
+      'm4a': 'audio',
+      'jpg': 'image',
+      'jpeg': 'image',
+      'png': 'image'
+    }
+    return typeMap[extension] || 'image';
   }
-};
-
   // useEffect to load media source from Firebase
   useEffect(() => {
     const loadMediaURL = async () => {
-      if (mediaURL) {
-        const downloadURL = await fetchMediaURL(mediaURL);
-        if (downloadURL) setMediaSource(downloadURL);
+      try {
+        let url = mediaURL || fileURL;
+        
+        if (url) {
+          const downloadURL = mediaURL
+            ? await getDownloadURL(ref(storage, mediaURL))
+            : url;
+  
+          if (downloadURL) {
+            setMediaSource(downloadURL);
+
+            const extension = extractFileExtension(downloadURL);
+            const finalType = extension ? mapExtensionToMediaType(extension) : 'image';
+
+            setMediaType(finalType);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading media URL:', error);
       }
     };
     loadMediaURL();
-  }, [mediaURL]);
+  }, [mediaURL, fileURL]);
   
   // useEffect to load media source from Firebase
   useEffect(() => {
@@ -116,26 +153,51 @@ const Post: React.FC<PostProps> = ({
   };
 
   const renderMedia = () => {
-    if (!mediaSource) return null;
+    if (!mediaSource) return null; 
 
-    const isVideo = /\.(mp4|webm|ogg|mov)$/i.test(mediaSource);
-    const isGif = /\.gif$/i.test(mediaSource);
+    const getAudioFileName = (url: string | undefined, fallbackFileName: string | undefined): string => {
+      if (!url) return fallbackFileName || 'Audio File'; 
+      
+      // decode the URL to handle encoded characters
+      const decodedUrl = decodeURIComponent(url);
 
-    if (isGif) {
-      return <img src={mediaSource} alt="Uploaded GIF" className="w-full h-auto object-cover" />;
-    } else if (isVideo) {
-      return (
-        <video controls autoPlay loop className="w-full h-auto object-cover">
-          <source src={mediaSource} type="video/mp4" />
-          <source src={mediaSource} type="video/webm" />
-          <source src={mediaSource} type="video/ogg" />
-          <source src={mediaSource} type="video/quicktime" />
-          Your browser does not support the video tag.
-        </video>
-      );
+      // Extract the filename part from the URL, ensuring we dont't include any metadata like UUIDs
+      const fileNameWithExtension = decodedUrl.split('/').pop()?.split('?')[0];
+
+      // Extract file name without extension (if necesssary)
+      const fileName = fileNameWithExtension?.replace(/\.[^/.]+$/, '') || 'Audio File';
+
+      return fileName;
+    };
+
+    const audioFileName = getAudioFileName(fileURL, originalFileName);
+
+    switch (mediaType) {
+      case 'gif':
+        return <img src={mediaSource} alt="Uploaded GIF" className="w-full h-auto object-cover" />;
+      
+      case 'video':
+        return (
+          <video controls className="w-full h-auto object-cover">
+            <source src={mediaSource} type="video/mp4" />
+            <source src={mediaSource} type="video/webm" />
+            <source src={mediaSource} type="video/ogg" />
+            <source src={mediaSource} type="video/quicktime" />
+            Your browser does not support the video tag.
+          </video>
+        );
+      case 'audio':
+        return (
+         <AudioPlayer 
+            audioSrc={mediaSource}
+            audioTitle={audioFileName} 
+            fileURL={mediaSource}        
+          />
+        );
+      case 'image':
+      default:
+        return <img src={mediaSource} alt="Uploaded media" className="w-full h-auto object-cover" />;
     }
-
-    return <img src={mediaSource} alt="Uploaded media" className="w-full h-auto object-cover" />;
   };
 
   return (
@@ -149,7 +211,7 @@ const Post: React.FC<PostProps> = ({
 
       {renderMedia()}
 
-      {fileURL && (
+      {fileURL && mediaType === null && (
         <div className="mb-3">
           <a 
             href={fileURL} 
@@ -179,7 +241,7 @@ const Post: React.FC<PostProps> = ({
         {user && user.uid === authorId && (
           <button 
             onClick={handleDelete}
-            className='bg-white text-black'
+            className='bg-none text-black'
           >
             ×
           </button>
