@@ -1,11 +1,19 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth, db } from '../services/firebase';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+
+interface ProfileData {
+  bio: string;
+  location: string;
+  prolink: string;
+  profilePicUrl: string;
+}
 
 interface AuthContextType {
   currentUser: User | null;
-  profileData: { bio: string; location: string; prolink: string; profilePicUrl: string } | null;
+  profileData: ProfileData | null;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,7 +43,8 @@ export const AuthProvider : React.FC<{ children: ReactNode }> = ({ children }) =
       const userDoc = doc(db, 'users', uid);
       const docSnapshot = await getDoc(userDoc);
       if (docSnapshot.exists()) {
-        setProfileData(docSnapshot.data() as { bio: string; location: string; prolink: string; profilePicURL: string });
+        const data = docSnapshot.data()as ProfileData;
+        setProfileData(data);
       } else {
         console.log('No profile data found');
       }
@@ -44,20 +53,29 @@ export const AuthProvider : React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, profileData }}>
+    <AuthContext.Provider value={{ currentUser, profileData, logout }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
+
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;

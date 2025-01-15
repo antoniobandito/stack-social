@@ -1,111 +1,152 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { FaPlay, FaPause } from 'react-icons/fa';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { IoIosPause, IoIosPlay, IoIosRepeat } from "react-icons/io";
+import { useAudioPlayer } from '../context/AudioPlayerContent';
 
 interface AudioPlayerProps {
   audioSrc: string;
   audioTitle?: string;
   fileURL: string;
+  onPlay?: () => void;
+  className?: string;
 }
 
-const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioSrc, audioTitle, fileURL }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
+const AudioPlayer = React.memo(({ 
+  audioSrc, 
+  audioTitle, 
+  fileURL, 
+  onPlay,
+  className = ''
+}: AudioPlayerProps) => {
+  const { 
+    currentAudio,
+    isPlaying,
+    progress,
+    isRepeatEnabled,
+    playAudio,
+    pauseAudio,
+    seekTo,
+    toggleRepeat,
+    duration,
+    currentTime,
+    formatTime
+  } = useAudioPlayer();
+
   const [title, setTitle] = useState(audioTitle || 'Audio File');
-  const audioRef = useRef<HTMLAudioElement>(null);
+  
+  // Memoize current track check
+  const isCurrentTrack = useMemo(() => currentAudio.url === fileURL, [currentAudio.url, fileURL]);
 
   useEffect(() => {
-   // Extract file name from the URL if title isnt provided 
-   if (audioTitle) {
-    //Extract the part after the UUID pattern
-    const match = audioTitle.match(/^[a-f0-9-]+-(.+)$/);
-    const cleanedTitle = match ? match[1] : audioTitle;
-    setTitle(cleanedTitle);
-   } else if (audioSrc) {
-    // Fallback method using URL
-    const decodedUrl = decodeURIComponent(audioSrc);
-    const filename = decodedUrl.split('/').pop()?.split('?')[0] || 'Audio File';
-    const cleanedTitle = filename.replace(/^[a-f0-9-]+-/, '').replace(/\.[^/.]+$/, '');
-    setTitle(cleanedTitle);
+    if (audioTitle) {
+      const match = audioTitle.match(/^[a-f0-9-]+-(.+)$/);
+      const cleanedTitle = match ? match[1] : audioTitle;
+      setTitle(cleanedTitle);
+    } else if (audioSrc) {
+      const decodedUrl = decodeURIComponent(audioSrc);
+      const filename = decodedUrl.split('/').pop()?.split('?')[0] || 'Audio File';
+      const cleanedTitle = filename.replace(/^[a-f0-9-]+-/, '').replace(/\.[^/.]+$/, '');
+      setTitle(cleanedTitle);
     }
-   }, [audioTitle, audioSrc]);
+  }, [audioTitle, audioSrc]);
 
-  const togglePlayback = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
+  const handlePlayPause = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    console.log('Play/Pause clicked', { fileURL, isCurrentTrack, isPlaying });
+    
+    // Validate URL
+    try {
+      new URL(fileURL);
+    } catch (e) {
+      console.error('Invalid URL:', fileURL);
+      return;
     }
-  };
 
-  const updateProgress = () => {
-    if (audioRef.current) {
-        const currentTime = audioRef.current.currentTime;
-        const duration = audioRef.current.duration;
-        if (!isNaN(duration)) {
-        setProgress((currentTime / duration) * 100);
-      }
+    if (isCurrentTrack && isPlaying) {
+      pauseAudio();
+    } else {
+      playAudio(fileURL, title);
+      onPlay?.();
     }
-  };   
+  }, [isCurrentTrack, isPlaying, pauseAudio, playAudio, fileURL, title, onPlay]);
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-    if (audioRef.current) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const newTime = (clickX / rect.width) * audioRef.current.duration;
-      audioRef.current.currentTime = newTime;
-      setProgress((newTime / audioRef.current.duration) * 100);
+  const handleSeek = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (!isCurrentTrack) return;
+    
+    const rect = event.currentTarget.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const percentage = (clickX / rect.width) * 100;
+    seekTo(percentage);
+  }, [isCurrentTrack, seekTo]);
+
+  const handleRepeatToggle = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    toggleRepeat();
+  }, [toggleRepeat]);
+
+  const handleKeyPress = useCallback((event: React.KeyboardEvent) => {
+    if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault();
+      handlePlayPause(event as unknown as React.MouseEvent);
     }
-  };
-
-  useEffect(() => {
-    const interval = setInterval(updateProgress, 200);
-    return () => clearInterval(interval);
-  }, []);
+  }, [handlePlayPause]);
 
   return (
-    <div className="audio-player flex flex-col items-center p-2 rounded-lg mb-1 shadow-sm border-black max-w-full">
-     <div className='flex items-center w-full'>
-      <button
-        onClick={togglePlayback}
-        className="mr-3 p-2  text-black transition-colors duration-200"
-        tabIndex={0}
-      >
-        {isPlaying ? 
-          <FaPause className="w-4 h-4" />
-        :
-          <FaPlay className="w-4 h-4" />
-        }
-      </button>
+    <div className={`flex flex-col items-center p-4 rounded-lg shadow-md border border-neutral-200 max-w-full ${className}`}>
+      <div className="flex items-center w-full gap-3">
+        <button
+          onClick={handlePlayPause}
+          onKeyDown={handleKeyPress}
+          className="p-2 rounded-full hover:bg-neutral-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label={isCurrentTrack && isPlaying ? 'Pause' : 'Play'}
+        >
+          {isCurrentTrack && isPlaying ? 
+            <IoIosPause className="w-6 h-6" /> :
+            <IoIosPlay className="w-6 h-6" />
+          }
+        </button>
 
-      <div className="flex-grow mb-2">
-        <div className='flex items-center'>
-          <span className="text-sm flex-grow ">{title}</span>
-          </div>
+        <div className="flex-grow">
+          <span className="text-sm font-medium line-clamp-1" title={title}>
+            {title}
+          </span>
+          {isCurrentTrack && (
+            <span className="text-xs text-neutral-500">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          )}
         </div>
+
+        <button 
+          onClick={handleRepeatToggle}
+          onKeyDown={handleKeyPress}
+          className={`p-2 rounded-full hover:bg-neutral-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            isRepeatEnabled ? 'text-black' : 'text-neutral-500 active:outline-none'
+          }`}
+          aria-label="Toggle repeat"
+        >
+          <IoIosRepeat className="w-5 h-5" />
+        </button>
       </div>
 
-      <div className='w-52 bg-slate-300 h-1 rounded mt-3'>
-        <div
-        className='bg-black h-1 rounded'
+      <div 
+        className="w-full h-2 bg-neutral-200 rounded-full mt-3 cursor-pointer"
         onClick={handleSeek}
-        style={{ width: `${progress}%` }}
-        ></div>
-    </div>
-
-      <audio
-        ref={audioRef}
-        src={fileURL}
-        className="hidden"
-        onEnded={() => setIsPlaying(false)}
-        onTimeUpdate={updateProgress}
+        role="slider"
+        aria-label="Audio progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={isCurrentTrack ? progress : 0}
       >
-        Your browser does not support the audio tag.
-      </audio>
+        <div
+          className="h-full bg-gray-400 rounded-full transition-all duration-200"
+          style={{ width: `${isCurrentTrack ? progress : 0}%` }}
+        />
+      </div>
     </div>
   );
-};
+});
+
+AudioPlayer.displayName = 'AudioPlayer';
 
 export default AudioPlayer;

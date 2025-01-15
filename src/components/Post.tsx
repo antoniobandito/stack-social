@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import Modal from 'react-modal';
+import MediaRenderer from './MediaRenderer';
+import { useAudioPlayer } from '../context/AudioPlayerContent';
+import { auth, db, storage } from '../services/firebase';
 import { addDoc, collection, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { auth, db } from '../services/firebase';
 import { getDownloadURL, ref } from 'firebase/storage';
-import { storage } from '../services/firebase';
-import '../styles/global.css';
 import { Link } from 'react-router-dom';
-import { FaMusic, FaPlay, FaPause } from 'react-icons/fa';
-import AudioPlayer from './AudioPlayer';
+import { IoIosHeart, IoIosHeartEmpty } from 'react-icons/io';
+import { IoEllipsisHorizontal, IoSyncCircleOutline, IoSyncCircleSharp } from 'react-icons/io5';
+import '../styles/global.css';
 
 interface PostProps {
   id: string;
@@ -18,7 +20,7 @@ interface PostProps {
   reposts?: string[];
   mediaURL?: string;
   mediaType?: 'image' | 'gif' | 'video' | 'audio';
-  fileURL: string;
+  fileURL?: string;
   originalFileName?: string;
   audioFileURL?: string;
   audioFileName?: string;
@@ -35,15 +37,28 @@ const Post: React.FC<PostProps> = ({
   mediaURL,
   mediaType: propMediaType = 'image',
   fileURL,
-  originalFileName  
+  originalFileName,  
+  audioFileURL,
+  audioFileName,
 }) => {
   const user = auth.currentUser;
   const [hasLiked, setHasLiked] = useState<boolean>(false);
   const [hasReposted, setHasReposted] = useState<boolean>(false);
   const [mediaSource, setMediaSource] = useState<string | null>(null);;
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [mediaType, setMediaType] = useState<string | null>(propMediaType);
-  const audioRef = React.useRef<HTMLAudioElement>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [audioPlayer, setAudioPlayer] = useState<{
+    isPlaying: boolean;
+    url: string;
+    title: string;
+  } | null>(null);
+
+  const { playAudio, currentAudio } = useAudioPlayer();
+
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
 
   const extractFileExtension = (url: string): string | null => {
     const match = url.match(/\.([0-9a-z]+)(?=[?#]|$)/i);
@@ -62,10 +77,11 @@ const Post: React.FC<PostProps> = ({
       'm4a': 'audio',
       'jpg': 'image',
       'jpeg': 'image',
-      'png': 'image'
-    }
+      'png': 'image',
+    };
     return typeMap[extension] || 'image';
-  }
+  };
+
   // useEffect to load media source from Firebase
   useEffect(() => {
     const loadMediaURL = async () => {
@@ -79,10 +95,8 @@ const Post: React.FC<PostProps> = ({
   
           if (downloadURL) {
             setMediaSource(downloadURL);
-
             const extension = extractFileExtension(downloadURL);
             const finalType = extension ? mapExtensionToMediaType(extension) : 'image';
-
             setMediaType(finalType);
           }
         }
@@ -152,102 +166,121 @@ const Post: React.FC<PostProps> = ({
     }
   };
 
-  const renderMedia = () => {
-    if (!mediaSource) return null; 
-
-    const getAudioFileName = (url: string | undefined, fallbackFileName: string | undefined): string => {
-      if (!url) return fallbackFileName || 'Audio File'; 
-      
-      // decode the URL to handle encoded characters
-      const decodedUrl = decodeURIComponent(url);
-
-      // Extract the filename part from the URL, ensuring we dont't include any metadata like UUIDs
-      const fileNameWithExtension = decodedUrl.split('/').pop()?.split('?')[0];
-
-      // Extract file name without extension (if necesssary)
-      const fileName = fileNameWithExtension?.replace(/\.[^/.]+$/, '') || 'Audio File';
-
-      return fileName;
-    };
-
-    const audioFileName = getAudioFileName(fileURL, originalFileName);
-
-    switch (mediaType) {
-      case 'gif':
-        return <img src={mediaSource} alt="Uploaded GIF" className="w-full h-auto object-cover" />;
-      
-      case 'video':
-        return (
-          <video controls className="w-full h-auto object-cover">
-            <source src={mediaSource} type="video/mp4" />
-            <source src={mediaSource} type="video/webm" />
-            <source src={mediaSource} type="video/ogg" />
-            <source src={mediaSource} type="video/quicktime" />
-            Your browser does not support the video tag.
-          </video>
-        );
-      case 'audio':
-        return (
-         <AudioPlayer 
-            audioSrc={mediaSource}
-            audioTitle={audioFileName} 
-            fileURL={mediaSource}        
-          />
-        );
-      case 'image':
-      default:
-        return <img src={mediaSource} alt="Uploaded media" className="w-full h-auto object-cover" />;
-    }
+  const handlePlayAudio = (url: string) => {
+      playAudio(url, audioFileName || originalFileName || 'Audio File');
   };
 
   return (
-    <div className={`grid-item ${mediaSource ? 'media-post' : 'text-post'} p-2 mt-3 rounded-md shadow-md`}>
-      <div className="post-author font-bold p-1">
+    <div>
+      <div className={`grid-item ${mediaSource ? 'media-post' : 'text-post'} p-2 mt-3 rounded-md shadow-md relative post-container`}
+      onClick={openModal}
+    >
+      <div className='flex justify-between items-center mb-2'>
+        <div className="post-author font-bold p-1">
         <Link to={`/profile/${authorId}`} className='username-link'>
         {authorUsername || 'Unknown'}
         </Link>
       </div>
-      {content && <div className="post-content p-1 mb-3">{content}</div>}
+      
+        <div className='relative dropdown-container'>
+        <button
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsDropdownOpen(!isDropdownOpen)
+        }}
+        className='p-1 rounded-full  focus:outline-none'
+        >
+          <IoEllipsisHorizontal />
+        </button>
 
-      {renderMedia()}
-
-      {fileURL && mediaType === null && (
-        <div className="mb-3">
-          <a 
-            href={fileURL} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="text-black">
-            View attached file
-          </a>
+        {isDropdownOpen && user && user.uid === authorId && (
+          <div className='absolute top-full right-0 w-40 rounded-md shadow-sm z-20'>
+            <button 
+            onClick={handleDelete}
+            className='block w-full text-left px-4 py-2 hover:bg-gray-100'
+          >
+              delete 
+            </button>
+          </div>
+          )}
         </div>
+      </div>
+
+      {content && <div className="post-content p-1 mb-3">{content}</div>}
+      {mediaSource && mediaType && (
+      <MediaRenderer
+        mediaSource={mediaSource}
+        mediaType={mediaType as 'image' | 'gif' | 'video' | 'audio'}
+        fileURL={fileURL}
+        originalFileName={originalFileName}
+        onPlay={handlePlayAudio} // Trigger MiniAudioPlayer when audio plays
+       />
       )}
 
       <div className='flex items-center'>
         <button 
-          onClick={handleLike}
+          onClick={(event) => {
+            event.stopPropagation(); // Prevent modal from opening
+            handleLike();
+          }}
           className={`py-1 px-2 rounded ${hasLiked ? 'text-black' : 'text-black'}`}
-        >
-          {hasLiked ? '♡' : '♡'} {likes.length}
+          >
+          {hasLiked ? <IoIosHeart/> : <IoIosHeartEmpty/> } {likes.length}
         </button>
 
         <button 
-          onClick={handleRepost} 
+          onClick={(event) => {
+            event.stopPropagation(); 
+            handleRepost();
+          }} 
           className={`py-1 px-2 rounded ${hasReposted ? 'text-black' : 'text-black'}`}
-        >
-          {hasReposted ? '∞︎︎' : '∞︎︎'} {reposts.length}
-        </button>
-
-        {user && user.uid === authorId && (
-          <button 
-            onClick={handleDelete}
-            className='bg-none text-black'
           >
-            ×
-          </button>
-        )}
+          {hasReposted ? <IoSyncCircleSharp/> : <IoSyncCircleOutline/> } {reposts.length}
+        </button>
       </div>
     </div>
+
+    <Modal 
+    isOpen={isModalOpen} 
+    onRequestClose={closeModal}
+    style={{
+      content: {
+      top: '50%',
+      left: '50%',
+      right: 'auto',
+      bottom: 'auto',
+      marginRight: '-50%',
+      transform: 'translate(-50%, -50%)',
+      maxWidth: '100%',
+      padding: '2%',
+      width: '50%',
+      maxHeight: '80vh',
+      overflow: 'auto'
+    },
+    overlay: {
+      
+      backgroundColor: 'rgba(0, 0, 0, 0.75)'
+    },
+  }}
+  >
+    <div className="modal-post-details">
+      <div className="modal-author font-bold">
+        <Link to={`/profile/${authorId}`}>{authorUsername || 'Unknown'}</Link>
+      </div>
+      <div className="modal-createdAt text-gray-500">{createdAt.toLocaleString()}</div>
+      <div className="modal-content p-2">{content}</div>
+      {mediaSource && mediaType && (
+        <MediaRenderer
+        mediaSource={mediaSource}
+        mediaType={mediaType as 'image' | 'gif' | 'video' | 'audio'}
+        fileURL={fileURL}
+        originalFileName={originalFileName}
+        onPlay={handlePlayAudio}
+        /> 
+      )}
+    </div>
+  </Modal>
+  </div>
   );
 };
 
