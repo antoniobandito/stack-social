@@ -44,13 +44,11 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const extractTitle = (audioUrl: string, providedTitle?: string): string => {
     if (providedTitle) {
-      const match = providedTitle.match(/^[a-f0-9-]+-(.+)$/);
-      return match ? match[1] : providedTitle;
-    } else {
-      const decodedUrl = decodeURIComponent(audioUrl);
-      const filename = decodedUrl.split('/').pop()?.split('?')[0] || 'Audio File';
-      return filename.replace(/^[a-f0-9-]+-/, '').replace(/\.[^/.]+$/, '');
+      return providedTitle; // Use provided title directly if available
     }
+    const decodedUrl = decodeURIComponent(audioUrl);
+    const filename = decodedUrl.split('/').pop()?.split('?')[0] || 'Audio File';
+    return filename.replace(/^[a-f0-9-]+-/, '').replace(/\.[^/.]+$/, '');
   };
 
   const formatTime = useCallback((timeInSeconds: number): string => {
@@ -61,41 +59,43 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   const playAudio = useCallback((audioUrl: string, audioTitle?: string) => {
-    console.log('Starting playAudio', { audioUrl, audioTitle });
+    console.log('playAudio called with:', { audioUrl, audioTitle });
 
-    if (!audioUrl) {
-      console.error('Invalid audio URL:', audioUrl);
-      return;
-    }
-
-    const cleanTitle = extractTitle(audioUrl, audioTitle);
-    if (currentAudio.url !== audioUrl) {
-      console.log('Setting new audio');
-      setCurrentAudio({ url: audioUrl, title: cleanTitle });
-    }
+    const cleanTitle = audioTitle || extractTitle(audioUrl);
+    console.log('Using title:', cleanTitle);
+    setCurrentAudio({ url: audioUrl, title: cleanTitle });
 
     if (audioRef.current) {
-      audioRef.current.src = audioUrl; // Ensure the src is updated
-      audioRef.current
-        .play()
-        .then(() => {
-          console.log('Audio played successfully');
+      // First pause any currently playing audio 
+      audioRef.current.pause();
+
+      // Then set the new source
+      audioRef.current.src = audioUrl; 
+
+      // Wait for audo to be loaded before playing
+      audioRef.current.load();
+
+      // Use oncanplaythough event to ensure audio is ready
+      const  playWhenReady = () => {
+      audioRef.current?.play()
+      .then(() => {
+        console.log('Audio played successfully:', cleanTitle);
           setIsPlaying(true);
           setIsMiniPlayerVisible(true);
         })
         .catch((error) => {
           console.warn('Error playing audio. Retrying...', error);
-          setTimeout(() => {
-            audioRef.current?.play().catch((retryError) => {
-              console.error('Retry failed:', retryError);
               setIsPlaying(false);
             });
-          }, 500); // Retry after 500ms
-        });
-        } else { 
+        // Remove the event listener after its used
+        audioRef.current?.removeEventListener('canplaythrough', playWhenReady);
+        };
+
+        audioRef.current.addEventListener('canplaythrough', playWhenReady);
+    } else {
       console.error('Audio ref is null');
     }
-  }, [currentAudio.url, extractTitle]);
+  }, []);
 
   const pauseAudio = useCallback(() => {
     if (audioRef.current) {

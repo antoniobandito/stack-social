@@ -115,6 +115,18 @@ const Post: React.FC<PostProps> = ({
     }
   }, [likes, reposts, user]);
 
+  // Add this useEffect to debug props
+useEffect(() => {
+  console.log('Post props:', {
+    fileURL,
+    originalFileName,
+    audioFileURL,
+    audioFileName,
+    mediaType,
+    mediaSource
+  });
+}, [fileURL, originalFileName, audioFileURL, audioFileName, mediaType, mediaSource]);
+
   const handleLike = async () => {
     if (!user) return;
 
@@ -167,7 +179,14 @@ const Post: React.FC<PostProps> = ({
   };
 
   const handlePlayAudio = (url: string) => {
-      playAudio(url, audioFileName || originalFileName || 'Audio File');
+      const title = audioFileName || originalFileName || 'Audio File';
+      console.log('Post handlePlayAudio:', {
+      url,
+      audioFileName,
+      originalFileName,
+      finalTitle: title
+    });
+      playAudio(url, title);
   };
 
   return (

@@ -1,6 +1,5 @@
 import React from 'react';
 import AudioPlayer from './AudioPlayer';
-import { useAudioPlayer } from '../context/AudioPlayerContent';
 
 interface MediaRendererProps {
     mediaSource: string;
@@ -13,23 +12,24 @@ interface MediaRendererProps {
 const MediaRenderer: React.FC<MediaRendererProps> = ({
     mediaSource,
     mediaType,
-    fileURL = '',
+    fileURL,
     originalFileName,
     onPlay
     }) => {
-      const { playAudio } = useAudioPlayer();
+      console.log('MediaRenderer props:', {
+        mediaSource, 
+        mediaType,
+        fileURL,
+        originalFileName
+      });
 
-      const handleAudioPlay = () => {
-        // Use the cleanest available filename
-        const audioTitle = originalFileName ||
-                          fileURL?.split('/').pop()?.split('?')[0] ||
-                          'Audio File';
-        
-        // Call both the context's playAudio and the parent's onPlay if provided
-        playAudio(mediaSource, audioTitle);
-        onPlay?.(mediaSource); 
-      };
-
+const handleAudioPlay = () => {
+    console.log('MediaRenderer audio play:', {
+    mediaSource,
+    originalFileName
+      }),
+      onPlay?.(mediaSource);
+    };
 
     switch (mediaType) {
       case 'gif':
@@ -47,12 +47,17 @@ const MediaRenderer: React.FC<MediaRendererProps> = ({
       );
     
     case 'audio':
+      console.log('MediaRenderer rendering AudioPlayer with:', {
+        mediaSource, 
+        originalFileName,
+        fileURL
+      });
       return (
       <AudioPlayer
         audioSrc={mediaSource}
         audioTitle={originalFileName}
         fileURL={fileURL || mediaSource}
-        onPlay={handleAudioPlay}
+        onPlay={() => onPlay?.(mediaSource)}
       />
     );
 

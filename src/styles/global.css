@@ -22,6 +22,14 @@ body {
   padding: 0;
 }
 
+body, html {
+  margin: 0;
+  padding: 0;
+  background-color: #fafafa;
+  color: #333; /* Text color */
+  min-height: 100vh;
+}
+
 header {
   font-family: "Gruppo", sans-serif;
   position: sticky;
@@ -121,6 +129,7 @@ img:focus {
   justify-content: center;
   padding: 30px;
   background-color: #fafafa;
+
 }
 
 /* Masonry Grid Layout */

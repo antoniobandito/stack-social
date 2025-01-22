@@ -1,5 +1,4 @@
 import React from 'react';
-import modal from 'react-modal';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import ProfilePage from './pages/ProfilePage';
@@ -13,7 +12,7 @@ import Header from './components/Header';
 import { AudioPlayerProvider } from './context/AudioPlayerContent';
 import MiniAudioPlayer from './components/MiniAudioPlayer';
 
-// Add error boundary
+// Audio Error Boundary
 class AudioErrorBoundary extends React.Component {
   state = { hasError: false };
 
@@ -37,42 +36,54 @@ const AppContent: React.FC = () => {
   return (
     <div className='main-content'>
       <Routes>
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="*" element={<Navigate to="/signup" />} />
+
+        {/* Protected Routes */}
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              <Header />
-              <Home />
-              <Navigation />
+                <Header />
+                <Home />
+                <Navigation />
             </ProtectedRoute>
           }
         />
+        
         <Route
-          path="/profile/:userId" 
+          path="/profile/:userId"
           element={
             <ProtectedRoute>
-              <ProfilePage />
-              <Navigation />
+                <Header />
+                <ProfilePage />
+                <Navigation />
+              
             </ProtectedRoute>
           }
         />
+        
         <Route
           path="/messages"
           element={
             <ProtectedRoute>
-              <Messages />
-              <Navigation />
+                <Header />
+                <Messages />
+                <Navigation />
+              
             </ProtectedRoute>
           }
         />
-        </Routes>
-        <AudioErrorBoundary>
+
+        {/* Catch-all route - should be last */}
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+
+      <AudioErrorBoundary>
         <MiniAudioPlayer />
-        </AudioErrorBoundary>
-      </div>
+      </AudioErrorBoundary>
+    </div>
   );
 };
 
@@ -91,4 +102,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

@@ -38,8 +38,8 @@ const AudioPlayer = React.memo(({
 
   useEffect(() => {
     if (audioTitle) {
-      const match = audioTitle.match(/^[a-f0-9-]+-(.+)$/);
-      const cleanedTitle = match ? match[1] : audioTitle;
+      // Clean up the title is needed
+      const cleanedTitle = audioTitle.replace(/^[a-f0-9-]+-/, '').replace(/\.[^/.]+$/, '');
       setTitle(cleanedTitle);
     } else if (audioSrc) {
       const decodedUrl = decodeURIComponent(audioSrc);
@@ -51,9 +51,13 @@ const AudioPlayer = React.memo(({
 
   const handlePlayPause = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
-    console.log('Play/Pause clicked', { fileURL, isCurrentTrack, isPlaying });
-    
-    // Validate URL
+    console.log('handlePlayPause:', {
+      audioSrc,
+      audioTitle,
+      currentTitle: title,
+      fileURL
+    });    
+
     try {
       new URL(fileURL);
     } catch (e) {
@@ -64,10 +68,11 @@ const AudioPlayer = React.memo(({
     if (isCurrentTrack && isPlaying) {
       pauseAudio();
     } else {
+      console.log('Calling playAudio with:', fileURL, title);
       playAudio(fileURL, title);
       onPlay?.();
     }
-  }, [isCurrentTrack, isPlaying, pauseAudio, playAudio, fileURL, title, onPlay]);
+  }, [isCurrentTrack, isPlaying, audioSrc, pauseAudio, playAudio, title, fileURL, audioTitle, onPlay]);
 
   const handleSeek = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();

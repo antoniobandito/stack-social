@@ -25,11 +25,9 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
   } = useAudioPlayer();
 
   const [isDragging, setIsDragging] = useState(false);
-  const [hoverTime, setHoverTime] = useState<number | null>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Define all callbacks before any conditional returns
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
@@ -47,7 +45,9 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!playerRef.current) return;
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.non-draggable')) {
+      return; // Prevent dragging on buttons or duration bar
+    }
 
     setIsDragging(true);
     dragStartRef.current = {
@@ -57,42 +57,6 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
     e.preventDefault();
   }, [miniPlayerPosition.x, miniPlayerPosition.y]);
 
-  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = (clickX / rect.width) * 100;
-    seekTo(percentage);
-  }, [seekTo]);
-
-  const handleClose = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    hideMiniPlayer();
-    onClose?.();
-  }, [hideMiniPlayer, onClose]);
-
-  const handlePlayPause = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isPlaying) {
-      pauseAudio();
-    } else if (currentAudio.url) {
-      playAudio(currentAudio.url, currentAudio.title!);
-    }
-  }, [isPlaying, pauseAudio, playAudio, currentAudio]);
-
-  const handleHover = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const hoverX = e.clientX - rect.left;
-    const hoverPosition = (hoverX / rect.width) * duration;
-    setHoverTime(hoverPosition);
-  }, [duration]);
-
-  const handleRepeatToggle = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleRepeat();
-  }, [toggleRepeat]);
-
-  // Effect for drag listeners
   React.useEffect(() => {
     if (!isDragging) return;
 
@@ -105,7 +69,6 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Memoize style object
   const containerStyle = useMemo(() => ({
     top: `${miniPlayerPosition.y}px`,
     left: `${miniPlayerPosition.x}px`,
@@ -113,9 +76,9 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
     padding: '16px',
     zIndex: 1000,
     cursor: isDragging ? 'grabbing' : 'grab',
+    minHeight: '80px'
   }), [miniPlayerPosition.y, miniPlayerPosition.x, isDragging]);
 
-  // Early return AFTER all hooks
   if (!currentAudio.url) return null;
 
   return (
@@ -123,24 +86,23 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
       ref={playerRef}
       className="mini-audio-player fixed bg-white rounded-lg shadow-md pointer-events-auto drag-handle"
       style={containerStyle}
+      onMouseDown={handleMouseDown}
     >
-      <div
-        className="absolute top-0 right-0 left-0 h-6 cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-      />
-
       <div className="flex items-center gap-3 mb-2">
         <button
           type="button"
-          onClick={handlePlayPause}
+          onClick={(e) => {
+            e.stopPropagation();
+            isPlaying ? pauseAudio() : playAudio(currentAudio.url!, currentAudio.title!);
+          }}
           className="text-black active:text-gray-700 p-1"
         >
           {isPlaying ? <IoIosPause size={24} /> : <IoIosPlay size={24} />}
         </button>
-        
+
         <div className="flex-grow">
           <div className='text-sm font-medium truncate'>
-            {currentAudio.title}
+            {currentAudio.title || 'No title available'}
           </div>
           <div className='text-xs text-gray-500'>
             {formatTime(currentTime)} / {formatTime(duration)}
@@ -149,7 +111,10 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
 
         <button
           type="button"
-          onClick={handleRepeatToggle}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleRepeat();
+          }}
           className={`p-1 ${isRepeatEnabled ? 'text-black' : 'text-gray-500'} active:text-gray-700 select-none`}
         >
           <IoIosRepeat size={20} />
@@ -157,7 +122,11 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
 
         <button
           type="button"
-          onClick={handleClose}
+          onClick={(e) => {
+            e.stopPropagation();
+            hideMiniPlayer();
+            onClose?.();
+          }}
           className="text-gray-500 active:text-gray-700 p-1"
         >
           <IoMdClose size={20} />
@@ -165,23 +134,19 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
       </div>
 
       <div 
-        className="h-1 bg-gray-200 rounded cursor-pointer relative"
-        onClick={handleSeek}
-        onMouseMove={handleHover}
-        onMouseLeave={() => setHoverTime(null)}
+        className="h-1 bg-gray-200 rounded cursor-pointer relative non-draggable"
+        onClick={(e) => {
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const percentage = (clickX / rect.width) * 100;
+          seekTo(percentage);
+        }}
       >
         <div 
           className="h-full bg-gray-400 rounded" 
           style={{ width: `${progress}%` }} 
         />
-        {hoverTime !== null && (
-          <div 
-            className="absolute bg-gray-700 text-white text-xs p-1 rounded -translate-x-1/2 -top-6"
-            style={{ left: `${(hoverTime / duration) * 100}%` }}
-          >
-            {formatTime(hoverTime)}
-          </div>
-        )}
       </div>
     </div>
   );

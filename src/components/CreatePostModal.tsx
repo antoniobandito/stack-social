@@ -19,7 +19,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [mediaType, setMediaType] = useState<'image' | 'gif' | 'video' | 'audio' | null>(null);
-    const [originaFileName, setOriginalFileName] = useState<string | null>(null);
+    const [originalFileName, setOriginalFileName] = useState<string | null>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
     const { currentUser } = useAuth();
@@ -73,6 +73,12 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
 
             // Determine the appropriate folder based on media type
             if (mediaFile) {
+            originalFileName = mediaFile.name;
+            console.log('Creating post with file:', {
+                mediaURL,
+                originalFileName,
+                mediaType
+            });
             const storageFolderMap: Record<string, string> = {
                 image: 'images/',
                 gif: 'gifs/',
@@ -105,7 +111,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
                 createdAt: Timestamp.now(),
                 mediaURL: mediaURL || '',
                 fileURL: mediaURL || '',
-                originaFileName: originalFileName,
+                originalFileName: originalFileName,
                 mediaType: mediaType || 'image',
                 likes:[],
                 reposts: [],
