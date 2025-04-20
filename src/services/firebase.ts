@@ -2,6 +2,7 @@ import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { setLogLevel } from 'firebase/firestore';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCw9Ff3frX1PYwziK0Jr3I9yvyvkWxy9P8",
@@ -29,6 +30,7 @@ setPersistence(auth, browserLocalPersistence)
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+setLogLevel('debug');
 
 export { auth, db, storage };
 

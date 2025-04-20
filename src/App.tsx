@@ -11,6 +11,7 @@ import { AuthProvider } from './context/AuthContext';
 import Header from './components/Header';
 import { AudioPlayerProvider } from './context/AudioPlayerContent';
 import MiniAudioPlayer from './components/MiniAudioPlayer';
+import MessageThread from './components/MessageThread';
 
 // Audio Error Boundary
 class AudioErrorBoundary extends React.Component {
@@ -34,7 +35,7 @@ class AudioErrorBoundary extends React.Component {
 
 const AppContent: React.FC = () => {
   return (
-    <div className='main-content'>
+    <div className='main-content flex flex-col h-screen'>
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
@@ -71,16 +72,25 @@ const AppContent: React.FC = () => {
                 <Header />
                 <Messages />
                 <Navigation />
-              
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages/:conversationId"
+          element={
+            <ProtectedRoute>
+              <Header />
+              <MessageThread />
+              <Navigation />
             </ProtectedRoute>
           }
         />
 
         {/* Catch-all route - should be last */}
         <Route path="*" element={<Navigate to="/login" />} />
-      </Routes>
+        </Routes>
 
-      <AudioErrorBoundary>
+        <AudioErrorBoundary>
         <MiniAudioPlayer />
       </AudioErrorBoundary>
     </div>

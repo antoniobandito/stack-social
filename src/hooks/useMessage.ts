@@ -1,4 +1,4 @@
-import { collection, where, orderBy, onSnapshot, Query, QueryDocumentSnapshot, query } from "firebase/firestore";
+import { collection, where, orderBy, onSnapshot, QueryDocumentSnapshot, query } from "firebase/firestore";
 import { useState, useEffect } from "react";
 import { db } from "../services/firebase";
 
@@ -25,8 +25,7 @@ export const useMessages = (conversationId: string) => {
     }
   
       const q = query(
-        collection(db, 'messages'),
-        where('conversationId', '==', conversationId),
+        collection(db, 'conversations', conversationId, 'messages'),
         orderBy('timestamp', 'desc')
       );
   

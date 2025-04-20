@@ -8,6 +8,11 @@
   background-color: #fafafa;
 }
 
+html, body {
+  height: 100%;
+  width: 100%;
+}
+
 html {
   min-height: 100%;
   display: flex;
@@ -20,14 +25,6 @@ body {
   background-color: #fafafa;
   margin: 0;
   padding: 0;
-}
-
-body, html {
-  margin: 0;
-  padding: 0;
-  background-color: #fafafa;
-  color: #333; /* Text color */
-  min-height: 100vh;
 }
 
 header {
@@ -46,6 +43,8 @@ img {
 img:focus {
   outline: none;
 }
+
+
 /* Search Bar */
 
 .search-bar {
@@ -123,14 +122,33 @@ img:focus {
   border-radius: 4px;
 }
 
+/* Header */
+.header {
+ 
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #fafafa;
+  z-index: 10;
+  height: 60px;
+  box-shadow: 0px 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.search-bar {
+  flex: 1;
+  max-width: 400px;
+  margin-right: 16px;
+}
+
 /* Wrapper to Center the Grid */
 .main-wrapper {
   display: flex;
   justify-content: center;
   padding: 30px;
   background-color: #fafafa;
-
 }
+
 
 /* Masonry Grid Layout */
 .grid-container {
@@ -426,6 +444,8 @@ button {
 .mini-audio-player {
   z-index: 1000;
 }
+
+
 /* Post Modal */
 
 .post-modal {
@@ -487,6 +507,25 @@ button {
 
 .post-modal-comments .comment strong {
   color: #0073e6;
+}
+
+
+
+
+@media (max-width: 768px) {
+  .messages-layout {
+    flex-direction: column;
+  }
+
+  .conversations-list {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .messages-view {
+    width: 100%;
+  }
 }
 
 /* Typography and Text Styling */
