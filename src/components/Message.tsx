@@ -1,4 +1,4 @@
-// Fully fixed Messages.tsx with real-time conversation list sync and modal closing
+// Fully fixed Messages.tsx with real-time conversation list sync and extended debugging
 import React, { useEffect, useState } from 'react';
 import {
   collection,
@@ -13,6 +13,7 @@ import {
   endAt,
   updateDoc,
   addDoc,
+  setDoc,
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -20,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { IoMdContact } from 'react-icons/io';
 import { debounce } from 'lodash';
+import { getAuth } from 'firebase/auth';
 import '../styles/global.css';
 import MessageThread from './MessageThread';
 
@@ -45,11 +47,13 @@ const Messages: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [suggestions, setSuggestions] = useState<UserProfileData[]>([]);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [message, setMessage] = useState('');
+  const [newMessage, setNewMessage] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfileData | null>(null);
   const [conversationUsers, setConversationUsers] = useState<Record<string, UserProfileData>>({});
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const navigate = useNavigate();
+  const firebaseAuth = getAuth();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -66,6 +70,9 @@ const Messages: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) return;
+    console.log('🔍 Current User UID:', currentUser.uid);
+    console.log('🔍 Firebase Auth Status:', firebaseAuth.currentUser ? 'Authenticated' : 'Not authenticated');
+    
     const conversationsRef = collection(db, 'conversations');
     const q = query(
       conversationsRef,
@@ -74,6 +81,7 @@ const Messages: React.FC = () => {
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
+      console.log('🔍 Conversations snapshot received, count:', snapshot.docs.length);
       const conversationData: ConversationData[] = snapshot.docs.map((doc) => ({
         id: doc.id,
         participants: doc.data().participants,
@@ -87,6 +95,9 @@ const Messages: React.FC = () => {
 
       await fetchUserProfiles([...new Set(allUserIds)]);
       setConversations(conversationData);
+    }, (error) => {
+      console.error('🔍 Error getting conversations:', error);
+      setDebugInfo(prevInfo => prevInfo + '\nError getting conversations: ' + error.message);
     });
 
     return () => unsubscribe();
@@ -145,77 +156,123 @@ const Messages: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-  if (!selectedUser || !message.trim() || !currentUser) return;
-  let conversationId;
-
-  try {
-    // Create the conversation document
-    const newConversationRef = await addDoc(collection(db, 'conversations'), {
-      participants: [currentUser.uid, selectedUser.id],
-      lastMessage: message,
-      updatedAt: serverTimestamp(),
-    });
-
-    conversationId = newConversationRef.id;
-
-    // ✅ Immediately set the selectedUser in conversationUsers map (prevents missing username)
-    setConversationUsers(prev => ({
-      ...prev,
-      [selectedUser.id]: selectedUser,
-    }));
-
-    // ✅ Also ensure their full profile is fetched (just in case)
-    await fetchUserProfiles([selectedUser.id]);
-  } catch (err: any) {
-    console.error('Create conversation failed:', err);
-    return;
-  }
-
-  try {
-    // Add the first message
-    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
-      senderId: currentUser.uid,
-      text: message,
-      timestamp: serverTimestamp(),
-      readBy: { [currentUser.uid]: true },
-    });
-
-    // Update conversation with latest message info
-    await updateDoc(doc(db, 'conversations', conversationId), {
-      lastMessage: message,
-      updatedAt: serverTimestamp(),
-    });
-
-    // ✅ Optional fallback in case the snapshot hasn’t updated UI yet
-    const exists = conversations.some(c => c.id === conversationId);
-    if (!exists) {
-      const fallbackConversation: ConversationData = {
-        id: conversationId,
-        participants: [currentUser.uid, selectedUser.id],
-        lastMessage: message,
-        updatedAt: new Date(), // Temporarily local timestamp
-      };
-      setConversations(prev => [fallbackConversation, ...prev]);
+    const auth = getAuth();
+    const firebaseUser = auth.currentUser;
+    
+    setDebugInfo(''); // Reset debug info
+  
+    // Check auth & inputs
+    if (!firebaseUser) {
+      const errMsg = '⚠️ Firebase auth user is null. Cannot send message.';
+      console.warn(errMsg);
+      setDebugInfo(errMsg);
+      return;
     }
-
-    // Update state and UI
-    setActiveConversationId(conversationId);
-    setMessage('');
-    setSearchInput('');
-    setSelectedUser(null);
-
-    // Close modal
-    setTimeout(() => {
+    if (!selectedUser || !newMessage.trim()) {
+      const errMsg = '⚠️ Missing selectedUser or message input.';
+      console.warn(errMsg);
+      setDebugInfo(errMsg);
+      return;
+    }
+  
+    console.log('📤 Starting send message...');
+    console.log('Firebase Auth UID:', firebaseUser.uid);
+    console.log('Selected User ID:', selectedUser.id);
+    console.log('Message:', newMessage);
+    
+    setDebugInfo(prev => prev + '\nStarting message send process...' + 
+                '\nCurrent User: ' + firebaseUser.uid + 
+                '\nSelected User: ' + selectedUser.id);
+  
+    const sortedIds = [firebaseUser.uid, selectedUser.id].sort();
+    const conversationId = sortedIds.join('_');
+    const conversationRef = doc(db, 'conversations', conversationId);
+    
+    console.log('Sorted IDs for conversation:', sortedIds);
+    console.log('Conversation document path:', `conversations/${conversationId}`);
+    
+    setDebugInfo(prev => prev + '\nConversation ID: ' + conversationId);
+  
+    try {
+      // STEP 1: Only create/update the conversation document first
+      console.log('Step 1: Creating conversation document');
+      setDebugInfo(prev => prev + '\nStep 1: Creating conversation document');
+      
+      const conversationDoc = await getDoc(conversationRef);
+      
+      if (!conversationDoc.exists()) {
+        console.log('🆕 Creating new conversation...');
+        setDebugInfo(prev => prev + '\nCreating new conversation document');
+        
+        await setDoc(conversationRef, {
+          participants: sortedIds,
+          lastMessage: newMessage.trim(),
+          updatedAt: serverTimestamp(),
+        });
+        console.log('✅ Conversation created');
+        setDebugInfo(prev => prev + '\n✅ Conversation created successfully');
+      } else {
+        console.log('🔁 Updating existing conversation...');
+        setDebugInfo(prev => prev + '\nUpdating existing conversation');
+        
+        await updateDoc(conversationRef, {
+          lastMessage: newMessage.trim(),
+          updatedAt: serverTimestamp(),
+        });
+        console.log('✅ Conversation updated');
+        setDebugInfo(prev => prev + '\n✅ Conversation updated successfully');
+      }
+      
+      // STEP 2: Now try to add the message to the subcollection
+      console.log('Step 2: Creating message document');
+      setDebugInfo(prev => prev + '\nStep 2: Creating message document');
+      
+      const messagesRef = collection(conversationRef, 'messages');
+      const newMessageData = {
+        senderId: firebaseUser.uid,
+        text: newMessage.trim(),
+        timestamp: serverTimestamp(),
+        readBy: {
+          [firebaseUser.uid]: true,
+        },
+      };
+      
+      await addDoc(messagesRef, newMessageData);
+      console.log('✅ Message added');
+      setDebugInfo(prev => prev + '\n✅ Message added successfully');
+  
+      // Reset input/UI only after both operations succeed
+      setNewMessage('');
+      setSelectedUser(null);
+      setSearchInput('');
       setIsMessageModalOpen(false);
-    }, 100);
-  } catch (err) {
-    console.error('Send message failed:', err);
-  }
-};
-
+      
+      // Set active conversation to the one just created/messaged
+      setActiveConversationId(conversationId);
+      
+      console.log('✅ Message send process completed successfully');
+      setDebugInfo(prev => prev + '\n✅ Message send process completed successfully');
+    } catch (err: any) {
+      console.error('❌ Error sending message:', err);
+      console.error('Error occurred at path:', err.path || 'unknown path'); 
+      console.error('Error details:', err.code, err.message);
+      
+      setDebugInfo(prev => prev + '\n❌ Error sending message: ' + err.message + 
+                  '\nError code: ' + err.code +
+                  '\nError path: ' + (err.path || 'unknown'));
+    }
+  };
 
   return (
     <div className="main-wrapper">
+      {/* Debug info panel - only visible during development */}
+      {process.env.NODE_ENV === 'development' && debugInfo && (
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-2 z-50 text-xs max-h-32 overflow-y-auto">
+          <h3 className="font-bold">Debug Info:</h3>
+          <pre>{debugInfo}</pre>
+        </div>
+      )}
+
       {/* Top bar with search and profile */}
       <div className='search-bar z-10'>
         <input
@@ -298,7 +355,9 @@ const Messages: React.FC = () => {
               <div
                 key={conversation.id}
                 onClick={() => setActiveConversationId(conversation.id)}
-                className="p-4 hover:bg-gray-100 cursor-pointer border-b border-gray-200"
+                className={`p-4 hover:bg-gray-100 cursor-pointer border-b border-gray-200 ${
+                  activeConversationId === conversation.id ? 'bg-gray-200' : ''
+                }`}
               >
                 <div className="font-medium">
                   {conversation.participants
@@ -324,77 +383,81 @@ const Messages: React.FC = () => {
           )}
         </div>
       </div>
+      
       {isMessageModalOpen && (
-  <div className="transition-opacity duration-200 ease-in-out fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-    <div className="bg-white w-full max-w-md p-6 rounded shadow-lg">
-      <h2 className="text-lg font-bold mb-4">Start a New Message</h2>
+        <div className="transition-opacity duration-200 ease-in-out fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md p-6 rounded shadow-lg">
+            <h2 className="text-lg font-bold mb-4">Start a New Message</h2>
 
-      {/* Search input */}
-      <input
-        type="text"
-        placeholder="Search users by username"
-        value={searchInput}
-        onChange={handleSearchChange}
-        className="w-full border px-3 py-2 mb-2 rounded"
-      />
-      {suggestions.length > 0 && (
-        <div className="border rounded mb-4 max-h-60 overflow-y-auto">
-          {suggestions.map(user => (
-            <div
-              key={user.id}
-              onClick={() => handleUserSelect(user)}
-              className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
+            {/* Search input */}
+            <input
+              type="text"
+              placeholder="Search users by username"
+              value={searchInput}
+              onChange={handleSearchChange}
+              className="w-full border px-3 py-2 mb-2 rounded"
+            />
+            {suggestions.length > 0 && (
+              <div className="border rounded mb-4 max-h-60 overflow-y-auto">
+                {suggestions.map(user => (
+                  <div
+                    key={user.id}
+                    onClick={() => handleUserSelect(user)}
+                    className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
+                  >
+                    {user.profilePicUrl ? (
+                      <img src={user.profilePicUrl} alt="" className="w-8 h-8 rounded-full mr-2" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gray-200 mr-2 flex items-center justify-center">
+                        <IoMdContact className="text-gray-500" />
+                      </div>
+                    )}
+                    <span>{user.username || user.id.substring(0, 6)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Message input and send */}
+            {selectedUser && (
+              <>
+                <p className="mb-2 text-sm text-gray-500">To: {selectedUser.username}</p>
+                <textarea
+                  placeholder="Type your message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  className="w-full border px-3 py-2 h-20 mb-4 rounded"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!newMessage.trim()}
+                  className={`text-white px-4 py-2 rounded mr-2 ${
+                    newMessage.trim()
+                    ? 'bg-slate-600 hover:bg-slate-700'
+                    : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Send
+                </button>
+              </>
+            )}
+
+            {/* Cancel */}
+            <button
+              onClick={() => {
+                setIsMessageModalOpen(false);
+                setNewMessage('');
+                setSelectedUser(null);
+                setSuggestions([]);
+                setSearchInput('');
+              }}
+              className="text-sm text-gray-500 mt-2 hover:underline"
             >
-              {user.profilePicUrl ? (
-                <img src={user.profilePicUrl} alt="" className="w-8 h-8 rounded-full mr-2" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gray-200 mr-2 flex items-center justify-center">
-                  <IoMdContact className="text-gray-500" />
-                </div>
-              )}
-              <span>{user.username || user.id.substring(0, 6)}</span>
-            </div>
-          ))}
+              Cancel
+            </button>
+          </div>
         </div>
       )}
-
-      {/* Message input and send */}
-      {selectedUser && (
-        <>
-          <p className="mb-2 text-sm text-gray-500">To: {selectedUser.username}</p>
-          <textarea
-            placeholder="Type your message..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="w-full border px-3 py-2 h-20 mb-4 rounded"
-          />
-          <button
-            onClick={handleSendMessage}
-            className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded mr-2"
-          >
-            Send
-          </button>
-        </>
-      )}
-
-      {/* Cancel */}
-      <button
-        onClick={() => {
-          setIsMessageModalOpen(false);
-          setMessage('');
-          setSelectedUser(null);
-          setSuggestions([]);
-          setSearchInput('');
-        }}
-        className="text-sm text-gray-500 mt-2 hover:underline"
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
-)}
-
-      {/* Message Modal and other components remain unchanged */}
     </div>
   );
 };
