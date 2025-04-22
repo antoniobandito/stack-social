@@ -55,6 +55,20 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    // Reset scroll position when component mounts
+    window.scrollTo(0, 0);
+
+    // Instead of locking scroll completely, just reset it initially 
+    const messageContainer = document.querySelector('.message-container');
+    if (messageContainer) {
+        messageContainer.scrollTop = 0;
+    }
+    
+    // No need to disable body scrolling 
+    }, [conversationId]);
+
+
   // Fetch conversation participants
   useEffect(() => {
     const fetchParticipants = async () => {
@@ -381,7 +395,7 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
       </div>
 
       {/* Messages - Make room for fixed input at bottom */}
-      <div className="flex-1 overflow-y-auto p-4" style={{ height: 'calc(100vh - 14rem)' }}>
+      <div className="flex-1 overflow-y-auto p-4 message-container" style={{ height: 'calc(100vh - 14rem)' }}>
         {groupMessagesByDate().map((group, groupIndex) => (
           <div key={groupIndex}>
             {/* Date separator */}
@@ -407,17 +421,17 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                   className={`mb-1 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {/* Avatar for other user (only show on first message in sequence) */}
-                  {!isCurrentUser && isFirstInSequence && (
+                  {!isCurrentUser && (
                     <div className="mr-2 self-end mb-2">
                       {participants.find(p => p.id === msg.senderId)?.profilePicUrl ? (
                         <img 
                           src={participants.find(p => p.id === msg.senderId)?.profilePicUrl} 
                           alt="avatar" 
-                          className="w-5 h-5 rounded-full object-cover"
+                          className="w-6 h-6 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
-                          <IoMdContact className="w-4 h-4" />
+                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+                          <IoMdContact className="w-6 h-6" />
                         </div>
                       )}
                     </div>
@@ -426,9 +440,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                   {/* Message container with conditional margin for sequences */}
                   <div 
                     className={`
-                      ${isCurrentUser ? 'ml-12' : 'mr-12'} 
-                      ${isFirstInSequence ? 'mt-2' : 'mt-1'}
-                      ${isLastInSequence ? 'mb-2' : 'mb-1'}
+                      ${isCurrentUser ? 'ml-4' : 'mr-4'} 
+                      ${isFirstInSequence ? 'mt-2' : 'mt-1.5'}
+                      ${isLastInSequence ? 'mb-2' : 'mb-1.5'}
                     `}
                   >
                     {/* Message bubble */}
