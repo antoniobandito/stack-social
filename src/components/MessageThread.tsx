@@ -18,6 +18,7 @@ import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { IoMdContact, IoMdSend, IoMdImage } from 'react-icons/io';
 import { BsCheckAll, BsCheck } from 'react-icons/bs';
+import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
 interface Message {
@@ -44,6 +45,7 @@ interface MessageThreadProps {
 
 const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [participants, setParticipants] = useState<UserProfile[]>([]);
@@ -202,6 +204,12 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
       updateTypingStatus(false);
     };
   }, []);
+
+  const handleProfileClick = (userId: string) => {
+    if (userId) {
+        navigate(`/profile/${userId}`);
+    }
+  }
 
   const handleTyping = () => {
     if (!isTyping) {
@@ -367,10 +375,13 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                 src={participants[0].profilePicUrl} 
                 alt={participants[0].displayName} 
                 className="w-10 h-10 rounded-full mr-3 object-cover"
+                onClick={() => handleProfileClick(participants[0].id)}
               />
             ) : (
               <div className="w-10 h-10 rounded-full mr-3 flex items-center justify-center">
-                <IoMdContact className="text-gray-600 w-6 h-6" />
+                <IoMdContact className="text-gray-600 w-6 h-6" 
+                onClick={() => handleProfileClick(participants[0].id)}
+                />
               </div>
             )}
             <div>
@@ -421,28 +432,37 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                   className={`mb-1 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {/* Avatar for other user (only show on first message in sequence) */}
-                  {!isCurrentUser && (
-                    <div className="mr-2 self-end mb-2">
-                      {participants.find(p => p.id === msg.senderId)?.profilePicUrl ? (
+                  {!isCurrentUser ? (
+                    <div className="mr-2 self-start flex-shrink-0 mt-4 w-6">
+                    {isFirstInSequence && (
+                    participants.find(p => p.id === msg.senderId)?.profilePicUrl ? (
                         <img 
-                          src={participants.find(p => p.id === msg.senderId)?.profilePicUrl} 
-                          alt="avatar" 
-                          className="w-6 h-6 rounded-full object-cover"
+                        src={participants.find(p => p.id === msg.senderId)?.profilePicUrl} 
+                        alt="avatar" 
+                        className="w-6 h-6 rounded-full object-cover"
+                        onClick={() => handleProfileClick(msg.senderId)}
                         />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
-                          <IoMdContact className="w-6 h-6" />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                ) : (
+                <div 
+                    className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center"
+                    onClick={() => handleProfileClick(msg.senderId)}
+                    >
+                    <IoMdContact className="w-4 h-4 text-gray-600" />
+                </div>
+                 )
+                )}
+                </div>
+                ) : (
+                // Add an empty div for the current user to maintain consistent layout
+                 <div className="w-6 flex-shrink-0"></div>
+                )}
                   
                   {/* Message container with conditional margin for sequences */}
                   <div 
                     className={`
-                      ${isCurrentUser ? 'ml-4' : 'mr-4'} 
-                      ${isFirstInSequence ? 'mt-2' : 'mt-1.5'}
-                      ${isLastInSequence ? 'mb-2' : 'mb-1.5'}
+                      ${isCurrentUser ? 'ml-4' : ''} 
+                      ${isFirstInSequence ? 'mt-2' : 'mt-0.5'}
+                      ${isLastInSequence ? 'mb-2' : 'mb-0.5'}
                     `}
                   >
                     {/* Message bubble */}
@@ -451,7 +471,7 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                         px-3 py-2 max-w-[450px] shadow-sm
                         ${isCurrentUser 
                           ? 'text-black rounded-2xl rounded-tr-sm' 
-                          : 'bg-gray-100 text-black rounded-2xl rounded-tl-sm'}
+                          : 'bg-gray-50 text-black rounded-2xl rounded-tl-sm'}
                       `}
                     >
                       {/* Media content */}

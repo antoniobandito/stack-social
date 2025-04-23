@@ -142,6 +142,14 @@ const Messages: React.FC = () => {
     }
   }, 300);
 
+  const handleProfileClick = (userId: String, event: React.MouseEvent) => {
+    // Strop propogation to prevent the conversation from being selected
+    event?.stopPropagation();
+    if (userId) {
+      navigate(`/profile/${userId}`);
+    }
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.trim();
     setSearchInput(value);
@@ -322,7 +330,7 @@ const Messages: React.FC = () => {
           )}
         </button>
         {isDropdownOpen && (
-          <div className="absolute right-0 w-36 bg-white border rounded shadow z-50">
+          <div className="absolute right-0 w-36 border rounded shadow z-50">
             <button
               onClick={() => navigate(`/profile/${currentUser?.uid}`)}
               className="w-full text-left px-4 py-2 hover:bg-gray-100"
@@ -387,6 +395,7 @@ const Messages: React.FC = () => {
                                 className={`w-8 h-8 rounded-full object-cover absolute ${
                                   index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
                                 } border-2 border-white`}
+                                onClick={(e) => handleProfileClick(id, e)}
                               />
                             ) : (
                               <div 
@@ -394,6 +403,7 @@ const Messages: React.FC = () => {
                                 className={`w-8 h-8 rounded-full flex items-center justify-center absolute ${
                                   index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
                                 } border-2 border-white`}
+                                onClick={(e) => handleProfileClick(id, e)}
                               >
                                 <IoMdContact className="text-gray-600 w-6 h-6" />
                               </div>
@@ -401,7 +411,10 @@ const Messages: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        <div className="w-12 h-12 rounded-full flex items-center justify-center">
+                        <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center"
+                        onClick={(e) => handleProfileClick(otherUserIds[0], e)}
+                        >
                           <IoMdContact className="text-gray-600 w-8 h-8" />
                         </div>
                       )}
@@ -462,9 +475,22 @@ const Messages: React.FC = () => {
                     className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
                   >
                     {user.profilePicUrl ? (
-                      <img src={user.profilePicUrl} alt="" className="w-8 h-8 rounded-full mr-2" />
+                      <img 
+                      src={user.profilePicUrl} 
+                      alt="" 
+                      className="w-8 h-8 rounded-full mr-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/profile/${user.id}`);
+                      }}
+                      />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 mr-2 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-gray-200 mr-2 flex items-center justify-center"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/profile/${user.id}`);
+                        }}
+                        >
                         <IoMdContact className="text-gray-500" />
                       </div>
                     )}
