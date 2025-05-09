@@ -6,6 +6,7 @@ import './index.css'
 import './styles/tailwind.css'
 import './styles/global.css'
 import { AuthProvider } from './context/AuthContext.tsx'
+import { MessagingProvider } from './context/MessagingContext.tsx'
 
 
 Modal.setAppElement('#root');

@@ -1,4 +1,4 @@
-// Enhanced MessageThread.tsx with fixed styling issues
+// Enhanced MessageThread.tsx with original styling but improved functionality
 import React, { useEffect, useRef, useState } from 'react';
 import {
   collection,
@@ -55,23 +55,22 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [inputRows, setInputRows] = useState(1);
 
   useEffect(() => {
-    // Reset scroll position when component mounts
-    window.scrollTo(0, 0);
-
-    // Instead of locking scroll completely, just reset it initially 
-    const messageContainer = document.querySelector('.message-container');
-    if (messageContainer) {
-        messageContainer.scrollTop = 0;
+    if (messages.length > 0 && messagesEndRef.current) {
+      const messageContainer = messagesEndRef.current.parentElement;
+      if (messageContainer) {
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+      }
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
-    
-    // No need to disable body scrolling 
-    }, [conversationId]);
+  }, [messages]);
 
-
-  // Fetch conversation participants
   useEffect(() => {
     const fetchParticipants = async () => {
       if (!conversationId) return;
@@ -102,26 +101,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
           }
           
           setParticipants(participantsData);
-          
-          // Subscribe to typing indicators
-          const typingRef = collection(db, 'conversations', conversationId, 'typing');
-          const unsubscribeTyping = onSnapshot(typingRef, (snapshot) => {
-            const updatedParticipants = [...participantsData];
-            
-            snapshot.docs.forEach(doc => {
-              const typingData = doc.data();
-              if (typingData.userId !== currentUser?.uid && typingData.isTyping) {
-                const participantIndex = updatedParticipants.findIndex(p => p.id === typingData.userId);
-                if (participantIndex !== -1) {
-                  updatedParticipants[participantIndex].isTyping = typingData.isTyping;
-                }
-              }
-            });
-            
-            setParticipants(updatedParticipants);
-          });
-
-          return () => unsubscribeTyping();
         }
       } catch (error) {
         console.error('Error fetching participants:', error);
@@ -131,7 +110,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     fetchParticipants();
   }, [conversationId, currentUser]);
 
-  // Fetch messages
   useEffect(() => {
     if (!conversationId || !currentUser) return;
 
@@ -139,10 +117,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) {
-        console.log('No messages found for conversation:', conversationId);
-      }
-
       const msgData = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
@@ -162,7 +136,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     return () => unsubscribe();
   }, [conversationId, currentUser]);
 
-  // Mark messages as read
   useEffect(() => {
     const markMessagesAsRead = async () => {
       if (!conversationId || !currentUser) return;
@@ -180,24 +153,8 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     if (messages.length > 0) markMessagesAsRead();
   }, [messages, conversationId, currentUser]);
 
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    if (messages.length > 0 && messagesEndRef.current) {
-        //Forcee scroll to bottom
-        const messageContainer = messagesEndRef.current.parentElement;
-        if (messageContainer) {
-            messageContainer.scrollTop = messageContainer.scrollHeight;
-        }
-        setTimeout(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-    }
-  }, [messages]);
-
-  // Handle typing indicator
   useEffect(() => {
     return () => {
-      // Clean up typing indicator when component unmounts
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
@@ -205,11 +162,23 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     };
   }, []);
 
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollHeight = textareaRef.current.scrollHeight;
+      const lineHeight = parseInt(getComputedStyle(textareaRef.current).lineHeight);
+      const maxHeight = lineHeight * 3;
+      
+      textareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+      setInputRows(Math.min(Math.floor(scrollHeight / lineHeight), 3));
+    }
+  };
+
   const handleProfileClick = (userId: string) => {
     if (userId) {
-        navigate(`/profile/${userId}`);
+      navigate(`/profile/${userId}`);
     }
-  }
+  };
 
   const handleTyping = () => {
     if (!isTyping) {
@@ -217,12 +186,10 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
       updateTypingStatus(true);
     }
     
-    // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     
-    // Set new timeout
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       updateTypingStatus(false);
@@ -254,7 +221,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
       let mediaUrl = null;
       let mediaType = null;
       
-      // Handle file upload
       if (fileUpload) {
         setIsUploading(true);
         const storage = getStorage();
@@ -277,15 +243,17 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
         ...(mediaUrl && { mediaUrl, mediaType })
       };
 
-      // Update conversation with last message
       await updateDoc(doc(db, 'conversations', conversationId), {
         lastMessage: mediaType ? `${currentUser.displayName || 'User'} sent ${mediaType === 'image' ? 'an image' : 'a file'}` : newMessage,
         updatedAt: serverTimestamp(),
       });
 
-      // Add the message
       await addDoc(collection(db, 'conversations', conversationId, 'messages'), newMsg);
       setNewMessage('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      setInputRows(1);
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -296,7 +264,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     if (file) {
       setFileUpload(file);
       
-      // Create image preview if it's an image
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -317,7 +284,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     }
   };
 
-  // Group messages by date
   const groupMessagesByDate = () => {
     const groups: { date: string; messages: Message[] }[] = [];
     let currentDate = '';
@@ -361,13 +327,12 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
     );
   };
 
-  // Check if anyone is typing
   const isAnyoneTyping = participants.some(p => p.isTyping);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
-      <div className="border-b border-gray-200 p-4 flex items-centersticky top-0 z-10 h-16">
+      <div className="border-b border-gray-200 p-4 flex items-center sticky top-0 z-10 h-16">
         {participants.length > 0 ? (
           <div className="flex items-center">
             {participants[0].profilePicUrl ? (
@@ -379,8 +344,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
               />
             ) : (
               <div className="w-10 h-10 rounded-full mr-3 flex items-center justify-center">
-                <IoMdContact className="text-gray-600 w-6 h-6" 
-                onClick={() => handleProfileClick(participants[0].id)}
+                <IoMdContact 
+                  className="text-gray-600 w-6 h-6" 
+                  onClick={() => handleProfileClick(participants[0].id)}
                 />
               </div>
             )}
@@ -400,29 +366,26 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
         ) : (
           <div className="flex items-center">
             <div className="w-10 h-10 rounded-full mr-3" />
-            <div className="h-4 w-24  rounded animate-pulse" />
+            <div className="h-4 w-24 rounded animate-pulse" />
           </div>
         )}
       </div>
 
-      {/* Messages - Make room for fixed input at bottom */}
-      <div className="flex-1 overflow-y-auto p-4 message-container" style={{ height: 'calc(100vh - 14rem)' }}>
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4">
         {groupMessagesByDate().map((group, groupIndex) => (
           <div key={groupIndex}>
-            {/* Date separator */}
             <div className="flex justify-center my-4">
               <div className="text-gray-500 text-xs px-3 py-1 rounded-full">
                 {group.date}
               </div>
             </div>
             
-            {/* Messages in this group */}
             {group.messages.map((msg, msgIndex) => {
               const isCurrentUser = msg.senderId === currentUser?.uid;
               const prevMsg = msgIndex > 0 ? group.messages[msgIndex - 1] : null;
               const nextMsg = msgIndex < group.messages.length - 1 ? group.messages[msgIndex + 1] : null;
               
-              // Check if this message is part of a sequence from same sender
               const isFirstInSequence = !prevMsg || prevMsg.senderId !== msg.senderId;
               const isLastInSequence = !nextMsg || nextMsg.senderId !== msg.senderId;
               
@@ -431,41 +394,29 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                   key={msg.id}
                   className={`mb-1 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                 >
-                  {/* Avatar for other user (only show on first message in sequence) */}
-                  {!isCurrentUser ? (
+                  {!isCurrentUser && (
                     <div className="mr-2 self-start flex-shrink-0 mt-4 w-6">
-                    {isFirstInSequence && (
-                    participants.find(p => p.id === msg.senderId)?.profilePicUrl ? (
-                        <img 
-                        src={participants.find(p => p.id === msg.senderId)?.profilePicUrl} 
-                        alt="avatar" 
-                        className="w-6 h-6 rounded-full object-cover"
-                        onClick={() => handleProfileClick(msg.senderId)}
-                        />
-                ) : (
-                <div 
-                    className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center"
-                    onClick={() => handleProfileClick(msg.senderId)}
-                    >
-                    <IoMdContact className="w-4 h-4 text-gray-600" />
-                </div>
-                 )
-                )}
-                </div>
-                ) : (
-                // Add an empty div for the current user to maintain consistent layout
-                 <div className="w-6 flex-shrink-0"></div>
-                )}
+                      {isFirstInSequence && (
+                        participants.find(p => p.id === msg.senderId)?.profilePicUrl ? (
+                          <img 
+                            src={participants.find(p => p.id === msg.senderId)?.profilePicUrl} 
+                            alt="avatar" 
+                            className="w-6 h-6 rounded-full object-cover"
+                            onClick={() => handleProfileClick(msg.senderId)}
+                          />
+                        ) : (
+                          <div 
+                            className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center"
+                            onClick={() => handleProfileClick(msg.senderId)}
+                          >
+                            <IoMdContact className="w-4 h-4 text-gray-600" />
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
                   
-                  {/* Message container with conditional margin for sequences */}
-                  <div 
-                    className={`
-                      ${isCurrentUser ? 'ml-4' : ''} 
-                      ${isFirstInSequence ? 'mt-2' : 'mt-0.5'}
-                      ${isLastInSequence ? 'mb-2' : 'mb-0.5'}
-                    `}
-                  >
-                    {/* Message bubble */}
+                  <div className={`${isCurrentUser ? 'ml-4' : ''} ${isFirstInSequence ? 'mt-2' : 'mt-0.5'}`}>
                     <div
                       className={`
                         px-3 py-2 max-w-[450px] shadow-sm
@@ -474,7 +425,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                           : 'bg-gray-50 text-black rounded-2xl rounded-tl-sm'}
                       `}
                     >
-                      {/* Media content */}
                       {msg.mediaUrl && msg.mediaType === 'image' && (
                         <div className="mb-2">
                           <img 
@@ -499,11 +449,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                         </div>
                       )}
                       
-                      {/* Text content */}
                       {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
                     </div>
                     
-                    {/* Timestamp and read status */}
                     {isLastInSequence && (
                       <div className={`text-[10px] mt-1 ${isCurrentUser ? 'text-right mr-1' : 'ml-1'}`}>
                         {renderMessageStatus(msg)}
@@ -516,7 +464,6 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
           </div>
         ))}
 
-        {/* Typing indicator */}
         {isAnyoneTyping && (
           <div className="flex items-center mt-2 mb-4">
             <div className="flex space-x-1 p-2 bg-gray-100 rounded-full">
@@ -533,11 +480,10 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Fixed message input at bottom */}
-      <div className="border-t border-gray-200 shadow-md z-10 h-20">
-        {/* Media preview */}
+      {/* Input area */}
+      <div className="border-t border-gray-200  z-10 sticky bottom-0">
         {imagePreview && (
-          <div className="px-4 py-2">
+          <div className="px-4 pt-2">
             <div className="relative inline-block">
               <img 
                 src={imagePreview} 
@@ -554,54 +500,60 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
           </div>
         )}
 
-        {/* Message input */}
-        <div className="p-3">
-          {isUploading && (
-            <div className="mb-2 text-xs text-gray-500">Uploading media...</div>
-          )}
+        {isUploading && (
+          <div className="px-4 text-xs text-gray-500">Uploading media...</div>
+        )}
+        
+        <div className="flex items-end gap-2 px-4 py-3 max-w-6xl mx-auto">
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="text-blue-500 hover:text-blue-600 mb-1"
+            disabled={isUploading}
+          >
+            <IoMdImage size={20} />
+          </button>
           
-          <div className="flex items-center gap-2 border- rounded-full px-4 py-2 w-full max-w-6xl mx-auto">
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="text-blue-500 hover:text-blue-600"
-              disabled={isUploading}
-            >
-              <IoMdImage size={20} />
-            </button>
-            
-            <input 
-              type="file" 
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept="image/*"
-              disabled={isUploading}
-            />
-            
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              onInput={handleTyping}
-              placeholder="..."
-              className="flex-1 bg-transparent border-none outline-none text-black min-w-0 w-full"
-              disabled={isUploading}
-            />
-            
-            <button
-              onClick={sendMessage}
-              disabled={(!newMessage.trim() && !fileUpload) || isUploading}
-              className={`text-black hover:text-blue-600 ${(!newMessage.trim() && !fileUpload) || isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <IoMdSend size={20} />
-            </button>
-          </div>
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept="image/*"
+            disabled={isUploading}
+          />
+          
+          <textarea
+            ref={textareaRef}
+            value={newMessage}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              adjustTextareaHeight();
+              handleTyping();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !isUploading) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            placeholder="..."
+            className="flex-1 border rounded-full px-4 py-2 outline-none resize-none"
+            style={{
+              minHeight: '2.5rem',
+              maxHeight: '7.5rem',
+              lineHeight: '1.25rem',
+            }}
+            rows={1}
+            disabled={isUploading}
+          />
+          
+          <button
+            onClick={sendMessage}
+            disabled={(!newMessage.trim() && !fileUpload) || isUploading}
+            className="text-black hover:text-blue-600 mb-1"
+          >
+            <IoMdSend size={20} />
+          </button>
         </div>
       </div>
     </div>

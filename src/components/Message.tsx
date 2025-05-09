@@ -1,5 +1,5 @@
 // Fully fixed Messages.tsx with real-time conversation list sync, extended debugging, and profile pictures
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   collection,
   doc,
@@ -54,6 +54,7 @@ const Messages: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<string>('');
   const navigate = useNavigate();
   const firebaseAuth = getAuth();
+  const messageThreadContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -103,6 +104,14 @@ const Messages: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
+  // Effect to ensure message thread container scrolls properly
+  useEffect(() => {
+    if (activeConversationId && messageThreadContainerRef.current) {
+      // Ensure the container scrolls to show both the messages and reply area
+      messageThreadContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeConversationId]);
+
   const fetchUserProfiles = async (userIds: string[]) => {
     const updatedProfiles: Record<string, UserProfileData> = { ...conversationUsers };
     await Promise.all(userIds.map(async (uid) => {
@@ -143,7 +152,7 @@ const Messages: React.FC = () => {
   }, 300);
 
   const handleProfileClick = (userId: String, event: React.MouseEvent) => {
-    // Strop propogation to prevent the conversation from being selected
+    // Stop propagation to prevent the conversation from being selected
     event?.stopPropagation();
     if (userId) {
       navigate(`/profile/${userId}`);
@@ -161,6 +170,19 @@ const Messages: React.FC = () => {
     setSearchInput(user.username || '');
     setSuggestions([]);
     setIsMessageModalOpen(true);
+  };
+
+  const handleConversationSelect = (conversationId: string) => {
+    // Reset scroll position when selecting a conversation
+    window.scrollTo(0, 0);
+    setActiveConversationId(conversationId);
+    
+    // Small delay to ensure DOM is updated before scrolling
+    setTimeout(() => {
+      if (messageThreadContainerRef.current) {
+        messageThreadContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   const handleSendMessage = async () => {
@@ -258,6 +280,13 @@ const Messages: React.FC = () => {
       // Set active conversation to the one just created/messaged
       setActiveConversationId(conversationId);
       
+      // Ensure message thread and reply area are visible after sending
+      setTimeout(() => {
+        if (messageThreadContainerRef.current) {
+          messageThreadContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+      
       console.log('✅ Message send process completed successfully');
       setDebugInfo(prev => prev + '\n✅ Message send process completed successfully');
     } catch (err: any) {
@@ -272,17 +301,10 @@ const Messages: React.FC = () => {
   };
 
   return (
-    <div className="main-wrapper">
-      {/* Debug info panel - only visible during development */}
-      {process.env.NODE_ENV === 'development' && debugInfo && (
-        <div className="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-2 z-50 text-xs max-h-32 overflow-y-auto">
-          <h3 className="font-bold">Debug Info:</h3>
-          <pre>{debugInfo}</pre>
-        </div>
-      )}
-
-      {/* Top bar with search and profile */}
-      <div className='search-bar z-10'>
+    <div className="h-screen flex flex-col">
+      
+     {/* Top bar with search and profile */}
+     <div className='search-bar z-10'>
         <input
           type='text'
           placeholder='search...'
@@ -316,7 +338,7 @@ const Messages: React.FC = () => {
         )}
       </div>
 
-
+      {/*Profile photo*/}
       <div className="absolute top-4 right-4">
         <button onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
           {profilePicUrl ? (
@@ -347,115 +369,119 @@ const Messages: React.FC = () => {
         )}
       </div>
 
-      <div className="flex mt-16 h-[calc(100vh-4rem)] overflow-hidden">
-        <div className="w-4/12 border-r border-gray-200 bg-gray-50 overflow-y-auto">
-          <button
-            className="m-4 bg-gray-800 hover:bg-slate-300 text-white hover:text-black font-bold py-2 px-4 rounded"
-            onClick={() => setIsMessageModalOpen(true)}
-          >
-            new message
-          </button>
-          {conversations.length === 0 ? (
-            <p className="text-gray-500 p-4">You have no conversations</p>
-          ) : (
-            conversations.map((conversation) => {
-              // Find the other user in this conversation
-              const otherUserIds = conversation.participants.filter(id => id !== currentUser?.uid);
-              
-              return (
-                <div
-                  key={conversation.id}
-                  onClick={() => {
-                    // Force component to reset scroll position
-                    window.scrollTo(0, 0);
-                    setActiveConversationId(conversation.id);
-                  }}
-                  className={`p-4 cursor-pointer border-b border-gray-200 ${
-                    activeConversationId === conversation.id ? 'bg-gray-50' : ''
-                  }`}
-                >
-                  <div className="flex items-center">
-                    {/* Profile picture */}
-                    <div className="mr-3">
-                      {otherUserIds.length === 1 && conversationUsers[otherUserIds[0]]?.profilePicUrl ? (
-                        <img
-                          src={conversationUsers[otherUserIds[0]].profilePicUrl}
-                          alt={conversationUsers[otherUserIds[0]].username || "User"}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : otherUserIds.length > 1 ? (
-                        <div className="w-12 h-12 relative">
-                          {/* For group chats, show up to 2 profile pictures in a stack */}
-                          {otherUserIds.slice(0, 2).map((id, index) => (
-                            conversationUsers[id]?.profilePicUrl ? (
-                              <img
-                                key={id}
-                                src={conversationUsers[id].profilePicUrl}
-                                alt="User"
-                                className={`w-8 h-8 rounded-full object-cover absolute ${
-                                  index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
-                                } border-2 border-white`}
-                                onClick={(e) => handleProfileClick(id, e)}
-                              />
-                            ) : (
-                              <div 
-                                key={id}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center absolute ${
-                                  index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
-                                } border-2 border-white`}
-                                onClick={(e) => handleProfileClick(id, e)}
-                              >
-                                <IoMdContact className="text-gray-600 w-6 h-6" />
-                              </div>
-                            )
-                          ))}
-                        </div>
-                      ) : (
-                        <div 
-                        className="w-12 h-12 rounded-full flex items-center justify-center"
-                        onClick={(e) => handleProfileClick(otherUserIds[0], e)}
-                        >
-                          <IoMdContact className="text-gray-600 w-8 h-8" />
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Conversation info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">
-                        {conversation.participants
-                          .filter(id => id !== currentUser?.uid)
-                          .map(id => conversationUsers[id]?.username || `User ${id.substring(0, 4)}`)
-                          .join(', ')}
+      {/* Main content area - automatically centered when screen gets wider */}
+      <div className="flex-1 flex mt-16 overflow-hidden">
+        <div className="w-full h-full max-w-6xl mx-auto flex">
+          {/* Conversation list */}
+          <div className="w-1/3 max-w-sm border-r border-gray-200 bg-gray-50 overflow-y-auto">
+            <button
+              className="m-4 bg-gray-800 hover:bg-slate-300 text-white hover:text-black font-bold py-2 px-4 rounded"
+              onClick={() => setIsMessageModalOpen(true)}
+            >
+              new message
+            </button>
+            
+            {conversations.length === 0 ? (
+              <p className="text-gray-500 p-4">You have no conversations</p>
+            ) : (
+              conversations.map((conversation) => {
+                // Find the other user in this conversation
+                const otherUserIds = conversation.participants.filter(id => id !== currentUser?.uid);
+                
+                return (
+                  <div
+                    key={conversation.id}
+                    onClick={() => handleConversationSelect(conversation.id)}
+                    className={`p-4 cursor-pointer border-b border-gray-200 ${
+                      activeConversationId === conversation.id ? '' : ''
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      {/* Profile picture */}
+                      <div className="mr-3">
+                        {otherUserIds.length === 1 && conversationUsers[otherUserIds[0]]?.profilePicUrl ? (
+                          <img
+                            src={conversationUsers[otherUserIds[0]].profilePicUrl}
+                            alt={conversationUsers[otherUserIds[0]].username || "User"}
+                            className="w-12 h-12 rounded-full object-cover"
+                          />
+                        ) : otherUserIds.length > 1 ? (
+                          <div className="w-12 h-12 relative">
+                            {/* For group chats, show up to 2 profile pictures in a stack */}
+                            {otherUserIds.slice(0, 2).map((id, index) => (
+                              conversationUsers[id]?.profilePicUrl ? (
+                                <img
+                                  key={id}
+                                  src={conversationUsers[id].profilePicUrl}
+                                  alt="User"
+                                  className={`w-8 h-8 rounded-full object-cover absolute ${
+                                    index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
+                                  } border-2 border-white`}
+                                  onClick={(e) => handleProfileClick(id, e)}
+                                />
+                              ) : (
+                                <div 
+                                  key={id}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center absolute ${
+                                    index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
+                                  } border-2 border-white`}
+                                  onClick={(e) => handleProfileClick(id, e)}
+                                >
+                                  <IoMdContact className="text-gray-600 w-6 h-6" />
+                                </div>
+                              )
+                            ))}
+                          </div>
+                        ) : (
+                          <div 
+                          className="w-12 h-12 rounded-full flex items-center justify-center"
+                          onClick={(e) => handleProfileClick(otherUserIds[0], e)}
+                          >
+                            <IoMdContact className="text-gray-600 w-8 h-8" />
+                          </div>
+                        )}
                       </div>
-                      <div className="text-gray-600 truncate">{conversation.lastMessage}</div>
-                      <div className="text-xs text-gray-400">
-                        {conversation.updatedAt.toLocaleString()}
+                      
+                      {/* Conversation info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">
+                          {conversation.participants
+                            .filter(id => id !== currentUser?.uid)
+                            .map(id => conversationUsers[id]?.username || `User ${id.substring(0, 4)}`)
+                            .join(', ')}
+                        </div>
+                        <div className="text-gray-600 truncate">{conversation.lastMessage}</div>
+                        <div className="text-xs text-gray-400">
+                          {conversation.updatedAt.toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-        <div className="flex-1 bg-gray-50 overflow-hidden">
-          {activeConversationId ? (
-            <MessageThread 
-              conversationId={activeConversationId} 
-              key={activeConversationId}
-            />
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-500">
-              <p>Select a conversation to start messaging</p>
-            </div>
-          )}
+                );
+              })
+            )}
+          </div>
+          
+          {/* Message thread area */}
+          <div className="flex-1 bg-gray-50 overflow-y-auto" ref={messageThreadContainerRef}>
+            {activeConversationId ? (
+              <MessageThread 
+                conversationId={activeConversationId} 
+                key={activeConversationId}
+              />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                <p>Select a conversation to start messaging</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       
+      {/* New message modal */}
       {isMessageModalOpen && (
-        <div className="transition-opacity duration-200 ease-in-out fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md p-6 rounded shadow-lg">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md p-6 rounded-lg shadow-lg">
             <h2 className="text-lg font-bold mb-4">Start a New Message</h2>
 
             {/* Search input */}
@@ -505,7 +531,7 @@ const Messages: React.FC = () => {
               <>
                 <p className="mb-2 text-sm text-gray-500">To: {selectedUser.username}</p>
                 <textarea
-                  placeholder="Type your message..."
+                  placeholder="..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   className="w-full border px-3 py-2 h-20 mb-4 rounded"
