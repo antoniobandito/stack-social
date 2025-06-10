@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMessaging } from '../context/MessagingContext';
 import { useNavigate } from 'react-router-dom';
+import { Home, User, MessageSquare } from 'lucide-react'; // Import icons
 
 interface PostProps {
   authorUsername: string;
@@ -28,12 +29,28 @@ const Navigation: React.FC = () => {
   
 
   return (
-    <nav className='fixed bottom-0 left-0 right-0 text-black p-4 flex justify-center'>
-        <div>
-            <Link to='/' className='mr-4 bg-inherit'>Home</Link>
-            <Link to={`/profile/${currentUser.uid}`} className='mr-4'>Profile</Link>
-            <button onClick={handleMessagesClick} className='mr-4'>Messages</button>
-        </div>
+    <nav className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-4 z-50">
+      <Link
+        to="/"
+        className="bg-transparent text-black p-3 rounded-full shadow hover:bg-gray-100 hover:text-black transition"
+        aria-label="Home"
+      >
+        <Home className="w-5 h-5"/>
+      </Link>
+      <Link
+        to={`/profile/${currentUser.uid}`}
+        className="bg-transparent text-black p-3 rounded-full shadow hover:bg-gray-100 hover:text-black transition"
+        aria-label="Profile"
+      >
+        <User className="w-5 h-5"/>
+      </Link>
+      <button
+        onClick={handleMessagesClick}
+        className="bg-transparent text-black p-3 rounded-full shadow hover:bg-gray-100 hover:text-black transition"
+        aria-label="Messages"
+      >
+        <MessageSquare className="w-5 h-5" />
+      </button>
     </nav>
   );
 };

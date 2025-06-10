@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Masonry from 'react-masonry-css';
 import { collection, doc, endAt, getDoc, onSnapshot, orderBy, query, startAt, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -41,6 +41,8 @@ const Home: React.FC = () => {
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [suggestions, setSuggestions] = useState<UserProfileData[]>([]);
+  const [activeTab, setActiveTab] = useState<'forYou' | 'following'>('forYou');
+  const [followingUsers, setFollowingUsers] = useState<string[]>([]);
   const navigate = useNavigate();
 
   // Fetch additional user profile data
@@ -105,6 +107,8 @@ const Home: React.FC = () => {
 
   const handleProfileClick = (userId: string) => {
     navigate(`/profile/${userId}`);
+    setSuggestions([]); // Clear suggestions after navigation
+    setSearchInput(''); // Clear search input
   };
 
   const handleSignOut = async () => {
@@ -119,6 +123,42 @@ const Home: React.FC = () => {
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
+
+  // Fetch the current user's following list
+  const fetchFollowing = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        setFollowingUsers(userData.following || []);
+      }
+    } catch (error) {
+      console.error('Error fetching following list:', error);
+    }
+  }, [currentUser]);
+
+  // Filter posts based on active tab
+  const filteredPosts = useMemo(() => {
+    if (activeTab === 'forYou') {
+      return posts;
+    } else {
+      return posts.filter(post => 
+        followingUsers.includes(post.authorId)
+      );
+    }
+  }, [posts, activeTab, followingUsers]);
+
+  // Fetch following list on mount and when currentUser changes
+  useEffect(() => {
+    fetchFollowing();
+  }, [fetchFollowing]);
+
+
+
 
   // Fetch posts for the feed 
   useEffect(() => {
@@ -143,103 +183,132 @@ const Home: React.FC = () => {
   }, []);
 
   return (
-    <div className="main-wrapper">
-      <div className='search-bar z-10'>
-        <input
-          type='text'
-          placeholder='search...'
-          value={searchInput}
-          onChange={handleSearchChange}
-          className='search-input focus:outline-none'
-          />
-          {suggestions.length > 0 && (
-            <ul className='suggestions-list hover:bg-gray-200'>
-              {suggestions.map(user => (
-                <li 
-                key={user.id} 
-                onClick={() => handleProfileClick(user.id)} 
-                className='suggestion-item flex items-center p-2 hover:bg-gray-200 hover:'
-                >
-                  {user.profilePicUrl ? (
-                    <img
-                    src={user.profilePicUrl}
-                    alt={`${user.username}'s profile`}
-                    className='w-10 h-10 rounded-full object-cover'
-                    />
-                  ) : (
-                    <div className='w-8 h-8 rounded-full bg-gray-200 mr-2 flex items-center justify-center text-white'>
-                      {/* Fallback Icon */}
-                      <IoMdContact className='w-5 h-5' />
-                    </div>
-                  )}
-                  <span>{user.username || 'No username found'}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-      </div>
+    <div className="app-container">
+      {/* Sticky Navigation Bar */}
+      <nav className="sticky-nav">
+        {/* Brand/Logo */}
+        <div className="nav-brand">
+          <h1 className="brand-title">stack</h1>
+        </div>
 
-      {/* User Profile Dropdown in Top Right */}
-      {currentUser && (
-        <div className="absolute top-4  right-4">
-          <div className="relative">
-            <button onClick={toggleDropdown} className="focus:outline-none">
-              {profilePicUrl ? (
-              <img 
-                src={profilePicUrl}
-                alt="Profile"
-                className="w-10 h-10 rounded-full object-cover cursor-pointer transition-opacity outline-none focus:outline-none"
+        {/* Search Bar */}
+        <div className="nav-search">
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="search..."
+              value={searchInput}
+              onChange={handleSearchChange}
+              className="search-input-nav"
             />
-            ) : (
-              <IoMdContact className='w-10 h-10 cursor-pointer' />
-            )}
-            </button>
-
-            {isDropdownOpen && (
-              <div className="absolute right-0 w-36 bg-inherit border rounded-lg shadow-lg z-50 focus:outline-none">
-                <button 
-                  onClick={() => navigate(`/profile/${currentUser.uid}`)}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                >
-                  profile
-                </button>
-                <button 
-                  onClick={handleSignOut}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-500"
-                >
-                  sign out
-                </button>
-              </div>
+            {suggestions.length > 0 && (
+              <ul className="suggestions-dropdown">
+                {suggestions.map(user => (
+                  <li 
+                    key={user.id} 
+                    onClick={() => handleProfileClick(user.id)} 
+                    className="suggestion-item-nav"
+                  >
+                    {user.profilePicUrl ? (
+                      <img
+                        src={user.profilePicUrl}
+                        alt={`${user.username}'s profile`}
+                        className="suggestion-avatar"
+                      />
+                    ) : (
+                      <div className="suggestion-avatar-fallback">
+                        <IoMdContact className="avatar-icon" />
+                      </div>
+                    )}
+                    <span className="suggestion-username">{user.username || 'No username found'}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>
-      )}
 
-      {/* Posts Feed */}
-      <Masonry
-        breakpointCols={breakpointColumnsObj}
-        className="grid-container"
-        columnClassName="grid-item"
-      >
-        {posts.filter(post => post.content || post.mediaURL || post.fileURL)
-        .map(post => (
-          <div key={post.id} className="grid-item">
-            <Post 
-              id={post.id}
-              authorId={post.authorId}
-              authorUsername={post.authorUsername}
-              content={post.content}
-              createdAt={post.createdAt}
-              likes={post.likes}
-              reposts={post.reposts}
-              mediaURL={post.mediaURL}
-              fileURL={post.fileURL}
-            />
+        {/* Profile Dropdown */}
+        {currentUser && (
+          <div className="nav-profile">
+            <div className="profile-dropdown-container">
+              <button onClick={toggleDropdown} className="profile-button">
+                {profilePicUrl ? (
+                  <img 
+                    src={profilePicUrl}
+                    alt="Profile"
+                    className="profile-avatar"
+                  />
+                ) : (
+                  <IoMdContact className="profile-icon" />
+                )}
+              </button>
+
+              {isDropdownOpen && (
+                <div className="profile-dropdown">
+                  <button 
+                    onClick={() => navigate(`/profile/${currentUser.uid}`)}
+                    className="dropdown-item"
+                  >
+                    profile
+                  </button>
+                  <button 
+                    onClick={handleSignOut}
+                    className="dropdown-item signout"
+                  >
+                    sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        ))}
-      </Masonry>
+        )}
+      </nav>
 
-      <FloatingActionButton />
+      {/* Tab Selector */}
+      <div className="tab-selector">
+        <button 
+          className={`tab-button ${activeTab === 'forYou' ? 'active' : ''}`}
+          onClick={() => setActiveTab('forYou')}
+        >
+          for you
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'following' ? 'active' : ''}`}
+          onClick={() => setActiveTab('following')}
+        >
+          following
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Posts Feed */}
+        <Masonry
+          breakpointCols={breakpointColumnsObj}
+          className="grid-container"
+          columnClassName="grid-item"
+        >
+          {filteredPosts.filter(post => post.content || post.mediaURL || post.fileURL)
+          .map(post => (
+            <div key={post.id} className="grid-item">
+              <Post 
+                id={post.id}
+                authorId={post.authorId}
+                authorUsername={post.authorUsername}
+                content={post.content}
+                createdAt={post.createdAt}
+                likes={post.likes}
+                reposts={post.reposts}
+                mediaURL={post.mediaURL}
+                fileURL={post.fileURL}
+              />
+            </div>
+          ))}
+        </Masonry>
+
+        <FloatingActionButton />
+      </div>
     </div>
   );
 };

@@ -14,7 +14,7 @@ const FloatingActionButton: React.FC = () => {
       <div className='fixed bottom-20 right-7'>
         <button
         onClick={handleOpenModal}
-        className='w-9 h-9 text-black flex items-center shadow-lg justify-center'
+        className='w-9 h-9 text-black flex items-center shadow-lg justify-center hover:bg-gray-100'
         >
           <IoMdAddCircle size={30} />
         </button>

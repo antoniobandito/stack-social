@@ -332,7 +332,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
-      <div className="border-b border-gray-200 p-4 flex items-center sticky top-0 z-10 h-16">
+      <div className="border-b border-gray-200 p-4 flex items-center sticky top-0 z-10 h-16"
+      style={{backgroundColor: '#fafafa' }}
+      >
         {participants.length > 0 ? (
           <div className="flex items-center">
             {participants[0].profilePicUrl ? (
@@ -421,8 +423,8 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
                       className={`
                         px-3 py-2 max-w-[450px] shadow-sm
                         ${isCurrentUser 
-                          ? 'text-black rounded-2xl rounded-tr-sm' 
-                          : 'bg-gray-50 text-black rounded-2xl rounded-tl-sm'}
+                          ? 'bg-#fafafa text-black rounded-2xl rounded-tr-sm' 
+                          : 'bg-#fafafa text-black rounded-2xl rounded-tl-sm'}
                       `}
                     >
                       {msg.mediaUrl && msg.mediaType === 'image' && (
@@ -481,7 +483,9 @@ const MessageThread: React.FC<MessageThreadProps> = ({ conversationId }) => {
       </div>
 
       {/* Input area */}
-      <div className="border-t border-gray-200  z-10 sticky bottom-0">
+      <div className="border-t border-gray-200  z-10 sticky bottom-0"
+      style={{ backgroundColor: '#fafafa' }}
+      >
         {imagePreview && (
           <div className="px-4 pt-2">
             <div className="relative inline-block">

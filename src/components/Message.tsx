@@ -1,4 +1,4 @@
-// Fully fixed Messages.tsx with real-time conversation list sync, extended debugging, and profile pictures
+// Updated Messages.tsx with proper bottom navigation spacing
 import React, { useEffect, useState, useRef } from 'react';
 import {
   collection,
@@ -37,7 +37,6 @@ interface UserProfileData {
   profilePicUrl?: string;
   username?: string;
 }
-
 
 const Messages: React.FC = () => {
   const [conversations, setConversations] = useState<ConversationData[]>([]);
@@ -151,18 +150,62 @@ const Messages: React.FC = () => {
     }
   }, 300);
 
-  const handleProfileClick = (userId: String, event: React.MouseEvent) => {
-    // Stop propagation to prevent the conversation from being selected
-    event?.stopPropagation();
-    if (userId) {
-      navigate(`/profile/${userId}`);
+  // Search functionality (same as Home component)
+  const handleSearchChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.trim();
+    setSearchInput(value);
+
+    if (!value) {
+      setSuggestions([]);
+      return;
+    }
+
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(
+        usersRef, 
+        orderBy('username'), 
+        startAt(value), 
+        endAt(value + '\uf8ff')
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        console.log('Search results:', querySnapshot.docs.map(doc => doc.data()));  
+      } else {
+        console.log('No matching results found');
+      }
+
+      const results = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        username: doc.data().username,
+        profilePicUrl: doc.data().profilePicUrl || null,
+      }));
+
+      setSuggestions(results as UserProfileData[]);
+    } catch (error) {
+      console.error('Error fetching user suggestions:', error);
     }
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.trim();
-    setSearchInput(value);
-    debouncedSearch(value);
+  const handleProfileClick = (userId: string) => {
+    navigate(`/profile/${userId}`);
+    setSuggestions([]); // Clear suggestions after navigation
+    setSearchInput(''); // Clear search input
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Sign out error', error);
+    }
+  };
+
+  const toggleDropdown = () => {
+    setIsDropdownOpen(!isDropdownOpen);
   };
 
   const handleUserSelect = (user: UserProfileData) => {
@@ -301,179 +344,205 @@ const Messages: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      
-     {/* Top bar with search and profile */}
-     <div className='search-bar z-10'>
-        <input
-          type='text'
-          placeholder='search...'
-          value={searchInput}
-          onChange={handleSearchChange}
-          className='search-input focus:outline-none'
-        />
-        {suggestions.length > 0 && (
-          <ul className='suggestions-list hover:bg-gray-200'>
-            {suggestions.map(user => (
-              <li
-                key={user.id}
-                onClick={() => handleUserSelect(user)}
-                className='suggestion-item flex items-center p-2 hover:bg-gray-200'
-              >
-                {user.profilePicUrl ? (
-                  <img
-                    src={user.profilePicUrl}
-                    alt={user.username || 'User'}
-                    className='w-10 h-10 rounded-full object-cover'
+    <div className="app-container">
+      {/* Sticky Navigation Bar - Same as Home component */}
+      <nav className="sticky-nav">
+        {/* Brand/Logo */}
+        <div className="nav-brand">
+          <h1 className="brand-title">stack</h1>
+        </div>
+
+        {/* Search Bar */}
+        <div className="nav-search">
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="search..."
+              value={searchInput}
+              onChange={handleSearchChange}
+              className="search-input-nav"
+            />
+            {suggestions.length > 0 && (
+              <ul className="suggestions-dropdown">
+                {suggestions.map(user => (
+                  <li 
+                    key={user.id} 
+                    onClick={() => handleProfileClick(user.id)} 
+                    className="suggestion-item-nav"
+                  >
+                    {user.profilePicUrl ? (
+                      <img
+                        src={user.profilePicUrl}
+                        alt={`${user.username}'s profile`}
+                        className="suggestion-avatar"
+                      />
+                    ) : (
+                      <div className="suggestion-avatar-fallback">
+                        <IoMdContact className="avatar-icon" />
+                      </div>
+                    )}
+                    <span className="suggestion-username">{user.username || 'No username found'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Profile Dropdown */}
+        {currentUser && (
+          <div className="nav-profile">
+            <div className="profile-dropdown-container">
+              <button onClick={toggleDropdown} className="profile-button">
+                {profilePicUrl ? (
+                  <img 
+                    src={profilePicUrl}
+                    alt="Profile"
+                    className="profile-avatar"
                   />
                 ) : (
-                  <div className='w-8 h-8 rounded-full bg-gray-200 mr-2 flex items-center justify-center text-white'>
-                    <IoMdContact className='w-5 h-5' />
-                  </div>
+                  <IoMdContact className="profile-icon" />
                 )}
-                <span>{user.username || 'No username found'}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              </button>
 
-      {/*Profile photo*/}
-      <div className="absolute top-4 right-4">
-        <button onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-          {profilePicUrl ? (
-            <img
-              src={profilePicUrl}
-              alt="Profile"
-              className="w-10 h-10 rounded-full object-cover"
-            />
-          ) : (
-            <IoMdContact className='w-10 h-10 cursor-pointer' />
-          )}
-        </button>
-        {isDropdownOpen && (
-          <div className="absolute right-0 w-36 border rounded shadow z-50">
-            <button
-              onClick={() => navigate(`/profile/${currentUser?.uid}`)}
-              className="w-full text-left px-4 py-2 hover:bg-gray-100"
-            >
-              Profile
-            </button>
-            <button
-              onClick={logout}
-              className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-500"
-            >
-              Sign Out
-            </button>
+              {isDropdownOpen && (
+                <div className="profile-dropdown">
+                  <button 
+                    onClick={() => navigate(`/profile/${currentUser.uid}`)}
+                    className="dropdown-item"
+                  >
+                    profile
+                  </button>
+                  <button 
+                    onClick={handleSignOut}
+                    className="dropdown-item signout"
+                  >
+                    sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </div>
+      </nav>
 
-      {/* Main content area - automatically centered when screen gets wider */}
-      <div className="flex-1 flex mt-16 overflow-hidden">
-        <div className="w-full h-full max-w-6xl mx-auto flex">
-          {/* Conversation list */}
-          <div className="w-1/3 max-w-sm border-r border-gray-200 bg-gray-50 overflow-y-auto">
-            <button
-              className="m-4 bg-gray-800 hover:bg-slate-300 text-white hover:text-black font-bold py-2 px-4 rounded"
-              onClick={() => setIsMessageModalOpen(true)}
-            >
-              new message
-            </button>
-            
-            {conversations.length === 0 ? (
-              <p className="text-gray-500 p-4">You have no conversations</p>
-            ) : (
-              conversations.map((conversation) => {
-                // Find the other user in this conversation
-                const otherUserIds = conversation.participants.filter(id => id !== currentUser?.uid);
-                
-                return (
-                  <div
-                    key={conversation.id}
-                    onClick={() => handleConversationSelect(conversation.id)}
-                    className={`p-4 cursor-pointer border-b border-gray-200 ${
-                      activeConversationId === conversation.id ? '' : ''
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      {/* Profile picture */}
-                      <div className="mr-3">
-                        {otherUserIds.length === 1 && conversationUsers[otherUserIds[0]]?.profilePicUrl ? (
-                          <img
-                            src={conversationUsers[otherUserIds[0]].profilePicUrl}
-                            alt={conversationUsers[otherUserIds[0]].username || "User"}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                        ) : otherUserIds.length > 1 ? (
-                          <div className="w-12 h-12 relative">
-                            {/* For group chats, show up to 2 profile pictures in a stack */}
-                            {otherUserIds.slice(0, 2).map((id, index) => (
-                              conversationUsers[id]?.profilePicUrl ? (
-                                <img
-                                  key={id}
-                                  src={conversationUsers[id].profilePicUrl}
-                                  alt="User"
-                                  className={`w-8 h-8 rounded-full object-cover absolute ${
-                                    index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
-                                  } border-2 border-white`}
-                                  onClick={(e) => handleProfileClick(id, e)}
-                                />
-                              ) : (
-                                <div 
-                                  key={id}
-                                  className={`w-8 h-8 rounded-full flex items-center justify-center absolute ${
-                                    index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
-                                  } border-2 border-white`}
-                                  onClick={(e) => handleProfileClick(id, e)}
-                                >
-                                  <IoMdContact className="text-gray-600 w-6 h-6" />
-                                </div>
-                              )
-                            ))}
-                          </div>
-                        ) : (
-                          <div 
-                          className="w-12 h-12 rounded-full flex items-center justify-center"
-                          onClick={(e) => handleProfileClick(otherUserIds[0], e)}
-                          >
-                            <IoMdContact className="text-gray-600 w-8 h-8" />
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Conversation info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">
-                          {conversation.participants
-                            .filter(id => id !== currentUser?.uid)
-                            .map(id => conversationUsers[id]?.username || `User ${id.substring(0, 4)}`)
-                            .join(', ')}
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Main content area - automatically centered when screen gets wider */}
+        <div className="flex-1 flex overflow-hidden mt-16">
+          <div className="w-full max-w-6xl mx-auto flex" style={{ height: 'calc(100vh - 5rem - 85px)' }}>
+            {/* Conversation list */}
+            <div className="w-1/3 max-w-sm border-r border-gray-200 bg-gray-50 overflow-y-auto">
+              <button
+                className="m-4 bg-gray-800 hover:bg-slate-300 text-white hover:text-black font-bold py-2 px-4 rounded"
+                onClick={() => setIsMessageModalOpen(true)}
+              >
+                new message
+              </button>
+              
+              {conversations.length === 0 ? (
+                <p className="text-gray-500 p-4">You have no conversations</p>
+              ) : (
+                conversations.map((conversation) => {
+                  // Find the other user in this conversation
+                  const otherUserIds = conversation.participants.filter(id => id !== currentUser?.uid);
+                  
+                  return (
+                    <div
+                      key={conversation.id}
+                      onClick={() => handleConversationSelect(conversation.id)}
+                      className={`p-4 cursor-pointer border-b border-gray-200 ${
+                        activeConversationId === conversation.id ? '' : ''
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        {/* Profile picture */}
+                        <div className="mr-3">
+                          {otherUserIds.length === 1 && conversationUsers[otherUserIds[0]]?.profilePicUrl ? (
+                            <img
+                              src={conversationUsers[otherUserIds[0]].profilePicUrl}
+                              alt={conversationUsers[otherUserIds[0]].username || "User"}
+                              className="w-12 h-12 rounded-full object-cover"
+                            />
+                          ) : otherUserIds.length > 1 ? (
+                            <div className="w-12 h-12 relative">
+                              {/* For group chats, show up to 2 profile pictures in a stack */}
+                              {otherUserIds.slice(0, 2).map((id, index) => (
+                                conversationUsers[id]?.profilePicUrl ? (
+                                  <img
+                                    key={id}
+                                    src={conversationUsers[id].profilePicUrl}
+                                    alt="User"
+                                    className={`w-8 h-8 rounded-full object-cover absolute ${
+                                      index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
+                                    } border-2 border-white`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/profile/${id}`);
+                                    }}
+                                  />
+                                ) : (
+                                  <div 
+                                    key={id}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center absolute ${
+                                      index === 0 ? 'top-0 left-0' : 'bottom-0 right-0'
+                                    } border-2 border-white`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/profile/${id}`);
+                                    }}
+                                  >
+                                    <IoMdContact className="text-gray-600 w-6 h-6" />
+                                  </div>
+                                )
+                              ))}
+                            </div>
+                          ) : (
+                            <div 
+                              className="w-12 h-12 rounded-full flex items-center justify-center"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/profile/${otherUserIds[0]}`);
+                              }}
+                            >
+                              <IoMdContact className="text-gray-600 w-8 h-8" />
+                            </div>
+                          )}
                         </div>
-                        <div className="text-gray-600 truncate">{conversation.lastMessage}</div>
-                        <div className="text-xs text-gray-400">
-                          {conversation.updatedAt.toLocaleString()}
+                        
+                        {/* Conversation info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">
+                            {conversation.participants
+                              .filter(id => id !== currentUser?.uid)
+                              .map(id => conversationUsers[id]?.username || `User ${id.substring(0, 4)}`)
+                              .join(', ')}
+                          </div>
+                          <div className="text-gray-600 truncate">{conversation.lastMessage}</div>
+                          <div className="text-xs text-gray-400">
+                            {conversation.updatedAt.toLocaleString()}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-          
-          {/* Message thread area */}
-          <div className="flex-1 bg-gray-50 overflow-y-auto" ref={messageThreadContainerRef}>
-            {activeConversationId ? (
-              <MessageThread 
-                conversationId={activeConversationId} 
-                key={activeConversationId}
-              />
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                <p>Select a conversation to start messaging</p>
-              </div>
-            )}
+                  );
+                })
+              )}
+            </div>
+            
+            {/* Message thread area */}
+            <div className="flex-1 bg-gray-50 overflow-y-auto" ref={messageThreadContainerRef}>
+              {activeConversationId ? (
+                <MessageThread 
+                  conversationId={activeConversationId} 
+                  key={activeConversationId}
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                  <p>Select a conversation to start messaging</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -502,13 +571,13 @@ const Messages: React.FC = () => {
                   >
                     {user.profilePicUrl ? (
                       <img 
-                      src={user.profilePicUrl} 
-                      alt="" 
-                      className="w-8 h-8 rounded-full mr-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/profile/${user.id}`);
-                      }}
+                        src={user.profilePicUrl} 
+                        alt="" 
+                        className="w-8 h-8 rounded-full mr-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/profile/${user.id}`);
+                        }}
                       />
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-gray-200 mr-2 flex items-center justify-center"
@@ -516,7 +585,7 @@ const Messages: React.FC = () => {
                           e.stopPropagation();
                           navigate(`/profile/${user.id}`);
                         }}
-                        >
+                      >
                         <IoMdContact className="text-gray-500" />
                       </div>
                     )}

@@ -1,87 +1,82 @@
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Gruppo&family=Nixie+One&family=Poiret+One&family=Rock+Salt&family=Rubik+Bubbles&family=Special+Elite&display=swap");
 
-/* General Reset and Base Styles */
+/* Ensure no unwanted spacing from existing styles */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  background-color: #fafafa;
 }
 
-html, body {
-  height: 100%;
-  width: 100%;
-}
-
+/* Reset any body/html margins that might be causing spacing */
 html {
+  margin: 0;
+  padding: 0;
   min-height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  /* Remove the centering styles that might be interfering */
+  display: block; /* Override the flex centering */
+  justify-content: unset;
+  align-items: unset;
 }
 
 body {
+  margin: 0;
+  padding: 0;
   font-family: "Nixie One", system-ui, sans-serif;
   background-color: #fafafa;
-  margin: 0;
-  padding: 0;
 }
 
+body, .app-container, .profile-page, 
+.main-content, .grid-container {
+  background-color: #fafafa !important;
+}
+
+/* Ensure the app container starts at the very top */
+.app-container {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: #fafafa;
+  position: relative;
+}
+
+/* Make sure the sticky nav is truly at the top */
+.sticky-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 12px 20px;
+  background-color: #fafafa;
+  border-bottom: 1px solid #fafafa;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1000;
+  height: 64px;
+  box-sizing: border-box;
+}
+
+/* Override any existing header styles */
 header {
-  font-family: "Gruppo", sans-serif;
-  position: sticky;
-  font-size: 1.5rem;
-  text-align: center;
-  padding: 20px;
+  display: none !important; /* Hide any existing header elements */
+}
+
+/* Override background color inheritance issues */
+.sticky-nav,
+.sticky-nav * {
   background-color: #fafafa;
 }
 
-img {
-  outline: none;
+.brand-title {
+  background-color: transparent !important;
 }
 
-img:focus {
-  outline: none;
+.suggestion-username {
+  background-color: transparent !important;
 }
 
-
-/* Search Bar */
-
-.search-bar {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 0;
-  padding: 3px 12px;
-  border-radius: 8px;
-  box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.1);
-}
-
-.search-input {
-  width: 200px;
-  padding: 8px;
-  border-radius: 4px;
-  outline: none;
-  font-size: 1rem;
-}
-
-.suggestions-list {
-  list-style-type: none;
-  border-radius: 8px;
-  padding: 0;
-  margin: 0;
-  z-index: 10;
-  max-height: 200px;
-  overflow: hidden;
-}
-
-.suggestion-item {
-  display: block;
-  align-items: center;
-  padding: 8px 16px;
-  width: 100%;
-}
 
 .suggestion-item img {
   border-radius: 50%;
@@ -124,7 +119,6 @@ img:focus {
 
 /* Header */
 .header {
- 
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -141,14 +135,243 @@ img:focus {
   margin-right: 16px;
 }
 
-/* Wrapper to Center the Grid */
+/* Navigation Search Bar */
+.nav-search {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  max-width: 400px;
+  margin: 0 20px;
+}
+
+.search-container {
+  position: relative;
+  width: 100%;
+}
+
+.search-input-nav {
+  width: 100%;
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  background-color: #fafafa;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.search-input-nav:focus {
+  border-color: #666;
+}
+
+/* Search Suggestions Dropdown */
+.suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1001;
+}
+
+.suggestion-item-nav {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  background-color: #fff;
+}
+
+.suggestion-item-nav:hover {
+  background-color: #f5f5f5;
+}
+
+.suggestion-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.suggestion-avatar-fallback {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.avatar-icon {
+  width: 20px;
+  height: 20px;
+  color: #666;
+}
+
+.suggestion-username {
+  font-size: 14px;
+  color: #000;
+  background-color: transparent;
+}
+
+/* Profile Dropdown */
+.nav-profile {
+  flex-shrink: 0;
+}
+
+.profile-dropdown-container {
+  position: relative;
+}
+
+.profile-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: opacity 0.2s ease;
+}
+
+.profile-button:hover {
+  opacity: 0.8;
+}
+
+.profile-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-icon {
+  width: 40px;
+  height: 40px;
+  color: #666;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 140px;
+  z-index: 1001;
+  margin-top: 8px;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+  color: #000;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f5f5;
+}
+
+.dropdown-item.signout {
+  color: #dc3545;
+}
+
+.dropdown-item.signout:hover {
+  background-color: #f8f9fa;
+}
+
+/* Brand/Logo */
+.nav-brand {
+  flex-shrink: 0;
+}
+
+.brand-title {
+  font-family: "Gruppo", sans-serif;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 0;
+  color: #000;
+  background-color: transparent;
+}
+
+/* For You / Following */
+
+.tab-selector {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+  background-color: transparent;
+  position: sticky;
+  top: 64px; /* Height of your sticky nav */
+  z-index: 999;
+}
+
+.tab-button {
+  padding: 8px 24px;
+  margin: 0 10px;
+  background: none;
+  border: none;
+  font-size: 11px;
+  font-family: "Nixie One", system-ui, sans-serif;
+  cursor: pointer;
+  position: relative;
+  color: #666;
+  background-color: #fafafa;
+  transition: all 0.3s ease;
+}
+
+.tab-button.active {
+  color: #000;
+  font-weight: bold;
+  outline: none;
+}
+
+.tab-button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  outline: none;
+}
+
+/* Main Content */
+.main-content {
+  padding-top: 20px;
+}
+
+/* Update existing main-wrapper to work with new structure */
 .main-wrapper {
   display: flex;
   justify-content: center;
   padding: 30px;
   background-color: #fafafa;
 }
-
 
 /* Masonry Grid Layout */
 .grid-container {
@@ -159,7 +382,9 @@ img:focus {
   ); /* Responsive columns */
   width: 100%;
   max-width: 100%; /* Full width */
-  padding: 40px;
+  background-color: #fafafa;
+  margin: 0 auto;
+  padding: 16px;
   gap: 30px;
   box-sizing: border-box;
 }
@@ -167,9 +392,10 @@ img:focus {
 /* Individual Post Styling */
 .grid-item {
   background-color: #fafafa;
+  padding: 1px;
   min-height: 125px;
-  min-width: 250px; /* Minimum width for items */
-  box-shadow: #000;
+  margin-bottom: 5px;
+  min-width: 0; /* Minimum width for items */
 }
 
 .grid-item :hover {
@@ -508,9 +734,6 @@ button {
 .post-modal-comments .comment strong {
   color: #0073e6;
 }
-
-
-
 
 @media (max-width: 768px) {
   .messages-layout {
