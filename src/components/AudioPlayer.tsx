@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { IoIosPause, IoIosPlay, IoIosRepeat } from "react-icons/io";
 import { useAudioPlayer } from '../context/AudioPlayerContent';
 
@@ -32,13 +32,17 @@ const AudioPlayer = React.memo(({
   } = useAudioPlayer();
 
   const [title, setTitle] = useState(audioTitle || 'Audio File');
-  
+  const titleRef = useRef<HTMLSpanElement>(null);
+  const scrollingContainerRef = useRef<HTMLDivElement>(null);
+  const [needsScroll, setNeedsScroll] = useState(false);
+  const [isVeryLong, setIsVeryLong] = useState(false);
+
   // Memoize current track check
   const isCurrentTrack = useMemo(() => currentAudio.url === fileURL, [currentAudio.url, fileURL]);
 
   useEffect(() => {
     if (audioTitle) {
-      // Clean up the title is needed
+      // Clean up the title if needed
       const cleanedTitle = audioTitle.replace(/^[a-f0-9-]+-/, '').replace(/\.[^/.]+$/, '');
       setTitle(cleanedTitle);
     } else if (audioSrc) {
@@ -49,15 +53,36 @@ const AudioPlayer = React.memo(({
     }
   }, [audioTitle, audioSrc]);
 
+  // Check if title needs scrolling and determine scroll speed
+  useEffect(() => {
+    if (scrollingContainerRef.current) {
+      const container = scrollingContainerRef.current;
+      const containerWidth = container.clientWidth;
+      
+      // Create a temporary element to measure text width
+      const tempElement = document.createElement('span');
+      tempElement.style.visibility = 'hidden';
+      tempElement.style.position = 'absolute';
+      tempElement.style.whiteSpace = 'nowrap';
+      tempElement.style.fontSize = '0.875rem';
+      tempElement.style.fontWeight = '500';
+      tempElement.textContent = title;
+      
+      document.body.appendChild(tempElement);
+      const textWidth = tempElement.offsetWidth;
+      document.body.removeChild(tempElement);
+      
+      const shouldScroll = textWidth > containerWidth;
+      setNeedsScroll(shouldScroll);
+      
+      // Determine if it's a very long title (for slower scrolling)
+      setIsVeryLong(textWidth > containerWidth * 2);
+    }
+  }, [title]);
+
   const handlePlayPause = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
-    console.log('handlePlayPause:', {
-      audioSrc,
-      audioTitle,
-      currentTitle: title,
-      fileURL
-    });    
-
+    
     try {
       new URL(fileURL);
     } catch (e) {
@@ -68,11 +93,10 @@ const AudioPlayer = React.memo(({
     if (isCurrentTrack && isPlaying) {
       pauseAudio();
     } else {
-      console.log('Calling playAudio with:', fileURL, title);
       playAudio(fileURL, title);
       onPlay?.();
     }
-  }, [isCurrentTrack, isPlaying, audioSrc, pauseAudio, playAudio, title, fileURL, audioTitle, onPlay]);
+  }, [isCurrentTrack, isPlaying, pauseAudio, playAudio, title, fileURL, onPlay]);
 
   const handleSeek = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
@@ -99,6 +123,7 @@ const AudioPlayer = React.memo(({
   return (
     <div className={`flex flex-col items-center p-4 rounded-lg shadow-md border border-neutral-200 max-w-full ${className}`}>
       <div className="flex items-center w-full gap-3">
+        {/* Play/Pause button */}
         <button
           onClick={handlePlayPause}
           onKeyDown={handleKeyPress}
@@ -110,11 +135,30 @@ const AudioPlayer = React.memo(({
             <IoIosPlay className="w-6 h-6" />
           }
         </button>
-
-        <div className="flex-grow">
-          <span className="text-sm font-medium line-clamp-1" title={title}>
-            {title}
-          </span>
+        
+        <div className="flex-grow min-w-0">
+          <div 
+            ref={scrollingContainerRef}
+            className="scrolling-container h-5 flex items-center"
+          >
+            {needsScroll ? (
+              <span 
+                className={`scrolling-title text-sm font-medium ${isVeryLong ? 'slow' : ''}`}
+                title={title}
+              >
+                {title}
+              </span>
+            ) : (
+              <span 
+                ref={titleRef}
+                className="text-sm font-medium line-clamp-1" 
+                title={title}
+              >
+                {title}
+              </span>
+            )}
+          </div>
+          
           {isCurrentTrack && (
             <span className="text-xs text-neutral-500">
               {formatTime(currentTime)} / {formatTime(duration)}

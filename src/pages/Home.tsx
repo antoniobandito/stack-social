@@ -42,8 +42,38 @@ const Home: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [suggestions, setSuggestions] = useState<UserProfileData[]>([]);
   const [activeTab, setActiveTab] = useState<'forYou' | 'following'>('forYou');
-  const [followingUsers, setFollowingUsers] = useState<string[]>([]);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
   const navigate = useNavigate();
+
+  // Fetch the current user's following list
+  useEffect(() => {
+    const fetchFollowing = async () => {
+      if (!currentUser) return;
+      
+      try {
+        const followingRef = collection(db, 'users', currentUser.uid, 'following');
+        const snapshot = await getDocs(followingRef);
+        const ids = snapshot.docs.map(doc => doc.id);
+        setFollowingIds(ids);
+      } catch (error) {
+        console.error('Error fetching following list:', error);
+      }
+    };
+    
+    fetchFollowing();
+  }, [currentUser]);
+
+  // Filter posts based on active tab
+  const filteredPosts = useMemo(() => {
+    if (activeTab === 'forYou') {
+      return posts;
+    } else {
+      return posts.filter(post => 
+        followingIds.includes(post.authorId) ||
+        post.reposts?.some(uid => followingIds.includes(uid))
+        );
+    }
+  }, [posts, activeTab, followingIds]);
 
   // Fetch additional user profile data
   useEffect(() => {
@@ -123,42 +153,6 @@ const Home: React.FC = () => {
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
-
-  // Fetch the current user's following list
-  const fetchFollowing = useCallback(async () => {
-    if (!currentUser) return;
-    
-    try {
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data();
-        setFollowingUsers(userData.following || []);
-      }
-    } catch (error) {
-      console.error('Error fetching following list:', error);
-    }
-  }, [currentUser]);
-
-  // Filter posts based on active tab
-  const filteredPosts = useMemo(() => {
-    if (activeTab === 'forYou') {
-      return posts;
-    } else {
-      return posts.filter(post => 
-        followingUsers.includes(post.authorId)
-      );
-    }
-  }, [posts, activeTab, followingUsers]);
-
-  // Fetch following list on mount and when currentUser changes
-  useEffect(() => {
-    fetchFollowing();
-  }, [fetchFollowing]);
-
-
-
 
   // Fetch posts for the feed 
   useEffect(() => {
@@ -283,6 +277,13 @@ const Home: React.FC = () => {
 
       {/* Main Content */}
       <div className="main-content">
+      {activeTab === 'following' && followingIds.length === 0 && (
+        <div className="empty-following-state">
+          <p>You're not following anyone yet</p>
+          <button onClick={() => navigate('/discover')}>Discover users</button>
+        </div>
+      )}
+
         {/* Posts Feed */}
         <Masonry
           breakpointCols={breakpointColumnsObj}

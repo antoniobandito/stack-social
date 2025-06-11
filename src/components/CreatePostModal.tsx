@@ -110,7 +110,6 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ onClose }) => {
                 authorUsername,
                 createdAt: Timestamp.now(),
                 mediaURL: mediaURL || '',
-                fileURL: mediaURL || '',
                 originalFileName: originalFileName,
                 mediaType: mediaType || 'image',
                 likes:[],

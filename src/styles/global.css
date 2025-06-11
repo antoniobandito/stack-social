@@ -735,6 +735,125 @@ button {
   color: #0073e6;
 }
 
+/* Audio Player Animation - Updated for better infinite scrolling */
+
+@keyframes scrollText {
+  0% { 
+    transform: translateX(100%); 
+  }
+  100% { 
+    transform: translateX(-100%); 
+  }
+}
+
+.scrolling-container {
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  height: 1.25rem; /* 20px */
+  display: flex;
+  align-items: center;
+}
+
+.scrolling-title {
+  white-space: nowrap;
+  position: absolute;
+  animation: scrollText 7s linear infinite;
+  font-size: 0.875rem; /* 14px */
+  font-weight: 500;
+  /* Remove padding-left as it's handled by the animation */
+}
+
+/* Pause animation on hover for better UX */
+.scrolling-container:hover .scrolling-title {
+  animation-play-state: paused;
+}
+
+/* Alternative slower scroll for very long titles */
+.scrolling-title.slow {
+  animation-duration: 25s;
+}
+
+/* For mini player specific styling */
+.mini-audio-player .scrolling-container {
+  height: 1.25rem;
+}
+
+.mini-audio-player .scrolling-title {
+  font-size: 0.875rem;
+}
+
+/* Waveform Styling */
+.waveform {
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  transition: all 0.3s ease;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.waveform:hover {
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Enhanced Mini Audio Player for waveform */
+.mini-audio-player {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Prevent text selection during drag */
+.mini-audio-player.dragging {
+  user-select: none;
+}
+
+/* Waveform container enhancements */
+.waveform-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+/* Responsive waveform adjustments */
+@media (max-width: 640px) {
+  .waveform {
+    height: 40px !important;
+  }
+  
+  .mini-audio-player .waveform {
+    height: 25px !important;
+  }
+}
+
+/* Animation for waveform appearance */
+@keyframes waveformFadeIn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+.waveform {
+  animation: waveformFadeIn 0.5s ease-out;
+}
+
+/* Glowing effect for active waveform */
+.waveform.active {
+  box-shadow: 
+    inset 0 1px 3px rgba(0, 0, 0, 0.1),
+    0 0 20px rgba(107, 114, 128, 0.3);
+}
+
+/* Smooth transitions for all waveform states */
+.waveform * {
+  transition: all 0.1s ease;
+}
+
+/* Responsive Response */
 @media (max-width: 768px) {
   .messages-layout {
     flex-direction: column;

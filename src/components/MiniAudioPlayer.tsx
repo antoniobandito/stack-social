@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { IoIosPause, IoIosPlay, IoIosRepeat, IoMdClose } from "react-icons/io";
 import { useAudioPlayer } from '../context/AudioPlayerContent';
 
@@ -26,8 +26,38 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
 
   const [isDragging, setIsDragging] = useState(false);
   const playerRef = useRef<HTMLDivElement>(null);
+  const titleContainerRef = useRef<HTMLDivElement>(null);
+  const [needsScroll, setNeedsScroll] = useState(false);
+  const [isVeryLong, setIsVeryLong] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Check if title needs scrolling and determine scroll speed
+  useEffect(() => {
+    if (!titleContainerRef.current || !currentAudio.title) return;
+    
+    const container = titleContainerRef.current;
+    const containerWidth = container.clientWidth;
+    
+    // Create a temporary element to measure text width
+    const tempElement = document.createElement('div');
+    tempElement.style.visibility = 'hidden';
+    tempElement.style.position = 'absolute';
+    tempElement.style.whiteSpace = 'nowrap';
+    tempElement.style.fontSize = '0.875rem';
+    tempElement.style.fontWeight = '500';
+    tempElement.textContent = currentAudio.title;
+    
+    document.body.appendChild(tempElement);
+    const textWidth = tempElement.offsetWidth;
+    document.body.removeChild(tempElement);
+    
+    const shouldScroll = textWidth > containerWidth;
+    setNeedsScroll(shouldScroll);
+    
+    // Determine if it's a very long title (for slower scrolling)
+    setIsVeryLong(textWidth > containerWidth * 2);
+  }, [currentAudio.title]);
+  
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
@@ -88,6 +118,7 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
       style={containerStyle}
       onMouseDown={handleMouseDown}
     >
+      {/* PlayPause Button */}
       <div className="flex items-center gap-3 mb-2">
         <button
           type="button"
@@ -100,10 +131,25 @@ const MiniAudioPlayer = React.memo(({ onClose }: MiniAudioPlayerProps) => {
           {isPlaying ? <IoIosPause size={24} /> : <IoIosPlay size={24} />}
         </button>
 
-        <div className="flex-grow">
-          <div className='text-sm font-medium truncate'>
-            {currentAudio.title || 'No title available'}
+        <div className="flex-grow min-w-0">
+          <div ref={titleContainerRef} className="scrolling-container">
+            {needsScroll ? (
+              <div 
+                className={`scrolling-title text-sm font-medium ${isVeryLong ? 'slow' : ''}`}
+                title={currentAudio.title || 'No title available'}
+              >
+                {currentAudio.title || 'No title available'}
+              </div>
+            ) : (
+              <div 
+                className="text-sm font-medium truncate title-text"
+                title={currentAudio.title || 'No title available'}
+              >
+                {currentAudio.title || 'No title available'}
+              </div>
+            )}
           </div>
+          
           <div className='text-xs text-gray-500'>
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
