@@ -1,5 +1,12 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Navigate,
+  useLocation,
+} from 'react-router-dom';
+
 import Home from './pages/Home';
 import ProfilePage from './pages/ProfilePage';
 import Login from './pages/Login';
@@ -7,15 +14,16 @@ import Signup from './pages/Signup';
 import Messages from './components/Message';
 import Navigation from './components/Navigation';
 import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Header from './components/Header';
 import { AudioPlayerProvider } from './context/AudioPlayerContent';
 import MiniAudioPlayer from './components/MiniAudioPlayer';
 import MessageThread from './components/MessageThread';
 import MinimizedMessages from './components/MinimizedMessages';
 import { MessagingProvider, useMessaging } from './context/MessagingContext';
+import FrontPage from './pages/FrontPage';
 
-// Audio Error Boundary remains unchanged
+// Error boundary for MiniAudioPlayer
 class AudioErrorBoundary extends React.Component {
   state = { hasError: false };
 
@@ -29,14 +37,22 @@ class AudioErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      return <div className='p-4'>Error loading audio player</div>;
+      return <div className="p-4">Error loading audio player</div>;
     }
     return this.props.children;
   }
 }
 
+// Separate AppRoutes to access hooks
 const AppRoutes: React.FC = () => {
-  const { showMinimizedMessages, closeMinimizedMessages, activeConversationId, minimizeMessages } = useMessaging();
+  const {
+    showMinimizedMessages,
+    closeMinimizedMessages,
+    activeConversationId,
+    minimizeMessages,
+  } = useMessaging();
+
+  const { currentUser } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
@@ -44,7 +60,6 @@ const AppRoutes: React.FC = () => {
       if (window.innerWidth > 700 && location.pathname === '/messages') {
         const scrollY = window.scrollY;
         sessionStorage.setItem('scrollY', scrollY.toString());
-        // Use the context function to minimize instead of local state
         minimizeMessages(activeConversationId);
       }
     };
@@ -62,21 +77,13 @@ const AppRoutes: React.FC = () => {
   }, [location.pathname]);
 
   return (
-    <div className='main-content flex flex-col h-screen'>
+    <div className="main-content flex flex-col h-screen">
       <Routes>
-        {/* Routes remain unchanged */}
+        {/* Auth-related */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Header />
-              <Home />
-              <Navigation />
-            </ProtectedRoute>
-          }
-        />
+
+        {/* Protected: Profile */}
         <Route
           path="/profile/:userId"
           element={
@@ -87,6 +94,8 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         />
+
+        {/* Protected: Messages */}
         <Route
           path="/messages"
           element={
@@ -107,15 +116,33 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         />
-        <Route path="*" element={<Navigate to="/login" />} />
+
+        {/* Conditionally render "/" route based on auth state */}
+        <Route
+          path="/"
+          element={
+            currentUser ? (
+              <ProtectedRoute>
+                <Header />
+                <Home />
+                <Navigation />
+              </ProtectedRoute>
+            ) : (
+              <FrontPage />
+            )
+          }
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
 
-      {/* Audio Player */}
+      {/* Global audio player */}
       <AudioErrorBoundary>
         <MiniAudioPlayer />
       </AudioErrorBoundary>
 
-      {/* Minimized Messages - now using the context state */}
+      {/* Minimized messages */}
       {showMinimizedMessages && (
         <MinimizedMessages
           onClose={closeMinimizedMessages}
@@ -126,16 +153,16 @@ const AppRoutes: React.FC = () => {
   );
 };
 
-// App component remains unchanged
+// App wrapper
 const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
         <AudioErrorBoundary>
           <AudioPlayerProvider>
-          <MessagingProvider>
-            <AppRoutes />
-          </MessagingProvider>
+            <MessagingProvider>
+              <AppRoutes />
+            </MessagingProvider>
           </AudioPlayerProvider>
         </AudioErrorBoundary>
       </Router>
