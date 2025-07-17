@@ -22,6 +22,7 @@ import MessageThread from './components/MessageThread';
 import MinimizedMessages from './components/MinimizedMessages';
 import { MessagingProvider, useMessaging } from './context/MessagingContext';
 import FrontPage from './pages/FrontPage';
+import AdsPortal from './pages/AdsPortal';
 
 // Error boundary for MiniAudioPlayer
 class AudioErrorBoundary extends React.Component {
@@ -116,6 +117,16 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+        path="/ads"
+        element={
+          <ProtectedRoute>
+            <Header />
+            <AdsPortal />
+            </ProtectedRoute>
+          }
+        />
+
 
         {/* Conditionally render "/" route based on auth state */}
         <Route
@@ -137,10 +148,11 @@ const AppRoutes: React.FC = () => {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
 
-      {/* Global audio player */}
+      {/* Global audio player 
       <AudioErrorBoundary>
         <MiniAudioPlayer />
       </AudioErrorBoundary>
+      */}
 
       {/* Minimized messages */}
       {showMinimizedMessages && (

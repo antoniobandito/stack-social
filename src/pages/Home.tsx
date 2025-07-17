@@ -4,6 +4,7 @@ import { collection, doc, endAt, getDoc, onSnapshot, orderBy, query, startAt, ge
 import { db } from '../services/firebase';
 import FloatingActionButton from '../components/FloatingActionButton';
 import Post from '../components/Post';
+import AdCard from '../components/ads/AdCard';
 import '../styles/global.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +28,14 @@ interface UserProfileData {
   username?: string;
 }
 
+interface AdData {
+  id: string;
+  companyName: string;
+  message: string;
+  imageUrl?: string;
+  link: string;
+}
+
 const breakpointColumnsObj = {
   default: 4,
   1100: 3,
@@ -43,6 +52,7 @@ const Home: React.FC = () => {
   const [suggestions, setSuggestions] = useState<UserProfileData[]>([]);
   const [activeTab, setActiveTab] = useState<'forYou' | 'following'>('forYou');
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [ads, setAds] = useState<AdData[]>([]);
   const navigate = useNavigate();
 
   // Fetch the current user's following list
@@ -63,6 +73,25 @@ const Home: React.FC = () => {
     fetchFollowing();
   }, [currentUser]);
 
+  // Fetch ads from Firestore
+  useEffect(() => {
+  const fetchAds = async () => {
+    try {
+      const adsRef = collection(db, 'ads');
+      const snapshot = await getDocs(adsRef);
+      const adList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as AdData[];
+      setAds(adList);
+    } catch (error) {
+      console.error('Error fetching ads:', error);
+    }
+  };
+
+  fetchAds();
+  }, []);
+
   // Filter posts based on active tab
   const filteredPosts = useMemo(() => {
     if (activeTab === 'forYou') {
@@ -74,6 +103,21 @@ const Home: React.FC = () => {
         );
     }
   }, [posts, activeTab, followingIds]);
+
+  const mergedFeed = useMemo(() => {
+    if (ads.length === 0) return filteredPosts;
+  
+    const result = [...filteredPosts];
+    const interval = 6;
+  
+    for (let i = interval; i < result.length; i += interval + 1) {
+      const randomAd = ads[Math.floor(Math.random() * ads.length)];
+      result.splice(i, 0, { ...randomAd, isAd: true } as any);
+    }
+  
+    return result;
+  }, [filteredPosts, ads]);
+  
 
   // Fetch additional user profile data
   useEffect(() => {
@@ -246,6 +290,12 @@ const Home: React.FC = () => {
                   >
                     profile
                   </button>
+                  <button
+                    onClick={() => navigate('/ads')}
+                    className="dropdown-item"
+                  >
+                    Ads
+                  </button>
                   <button 
                     onClick={handleSignOut}
                     className="dropdown-item signout"
@@ -286,27 +336,38 @@ const Home: React.FC = () => {
 
         {/* Posts Feed */}
         <Masonry
-          breakpointCols={breakpointColumnsObj}
-          className="grid-container"
-          columnClassName="grid-item"
+        breakpointCols={breakpointColumnsObj}
+        className="grid-container"
+        columnClassName="grid-item"
         >
-          {filteredPosts.filter(post => post.content || post.mediaURL || post.fileURL)
-          .map(post => (
-            <div key={post.id} className="grid-item">
-              <Post 
-                id={post.id}
-                authorId={post.authorId}
-                authorUsername={post.authorUsername}
-                content={post.content}
-                createdAt={post.createdAt}
-                likes={post.likes}
-                reposts={post.reposts}
-                mediaURL={post.mediaURL}
-                fileURL={post.fileURL}
+        {mergedFeed.filter(post => post.content || post.mediaURL || post.fileURL || post.isAd)
+          .map((item, index) => (
+            <div key={item.id || `ad-${index}`} className="grid-item">
+            {item.isAd ? (
+              <AdCard
+                id={item.id}
+                companyName={item.companyName}
+                message={item.message}
+                imageUrl={item.imageUrl}
+                link={item.link}
               />
-            </div>
-          ))}
-        </Masonry>
+            ) : (
+              <Post
+                id={item.id}
+                authorId={item.authorId}
+                authorUsername={item.authorUsername}
+                content={item.content}
+                createdAt={item.createdAt}
+                likes={item.likes}
+                reposts={item.reposts}
+                mediaURL={item.mediaURL}
+                fileURL={item.fileURL}
+              />
+            )}
+          </div>
+        ))}
+      </Masonry>
+
 
         <FloatingActionButton />
       </div>
